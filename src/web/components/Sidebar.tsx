@@ -94,7 +94,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               </div>
               <div>
                 <span className="font-bold text-sm tracking-tight text-zinc-900 dark:text-zinc-100">
-                  Neko<span className="text-zinc-400 dark:text-zinc-500 font-normal">Router</span>
+                  Meow<span className="text-zinc-400 dark:text-zinc-500 font-normal">Router</span>
                 </span>
               </div>
             </div>
