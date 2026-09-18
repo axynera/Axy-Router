@@ -182,21 +182,46 @@ function continuationContext(answer: string) {
   return answer.slice(0, half) + "\n\n[...middle omitted for context...]\n\n" + answer.slice(-half);
 }
 
+function anthropicMessagesToOpenAI(messages: any[]) {
+  return messages.flatMap((m: any) => {
+    const content = m?.content;
+    if (!Array.isArray(content)) return [{ ...m }];
+    if (m.role === "assistant") {
+      const text = content.filter((x: any) => x?.type === "text").map((x: any) => x.text || "").join("");
+      const toolCalls = content.filter((x: any) => x?.type === "tool_use").map((x: any) => ({
+        id: String(x.id || crypto.randomUUID()),
+        type: "function",
+        function: { name: String(x.name || ""), arguments: JSON.stringify(x.input ?? {}) }
+      }));
+      return [{ role: "assistant", content: text || null, ...(toolCalls.length ? { tool_calls: toolCalls } : {}) }];
+    }
+    const toolResults = content.filter((x: any) => x?.type === "tool_result");
+    if (toolResults.length) {
+      const textBlocks = content.filter((x: any) => x?.type === "text");
+      const resultMessages = toolResults.map((x: any) => ({
+        role: "tool",
+        tool_call_id: String(x.tool_use_id || ""),
+        content: typeof x.content === "string" ? x.content : JSON.stringify(x.content ?? "")
+      }));
+      if (textBlocks.length) resultMessages.unshift({ role: "user", content: textBlocks.map((x: any) => x.text || "").join("") } as any);
+      return resultMessages;
+    }
+    return [{ role: m?.role === "user" ? "user" : "assistant", content: content.filter((x: any) => x?.type === "text").map((x: any) => x.text || "").join("") }];
+  });
+}
+
 function toOpenAIBody(body: any, model: string, continuation?: { answer: string; instruction: string }) {
   const messages = Array.isArray(body?.messages) ? [...body.messages] : [];
   if (continuation) {
     messages.push({ role: "assistant", content: continuationContext(continuation.answer) });
     messages.push({ role: "user", content: continuation.instruction });
   }
-  const normalizedMessages = messages.map((m: any) => {
-    if (m?.role === "assistant" && Array.isArray(m?.content)) return m;
-    if (m?.role === "assistant" && Array.isArray(m?.tool_calls)) return m;
-    if (m?.role === "user" && Array.isArray(m?.content)) return m;
-    if (m?.role === "tool") return m;
-    return m;
-  });
+  const normalizedMessages = body?.messages?.some((m: any) => Array.isArray(m?.content) && m?.content.some((x: any) => x?.type === "tool_use" || x?.type === "tool_result"))
+    ? anthropicMessagesToOpenAI(messages)
+    : messages;
   const payload: any = { ...body, model, messages: normalizedMessages, stream: false };
   if (body?.max_completion_tokens && !body?.max_tokens) payload.max_tokens = body.max_completion_tokens;
+  if (payload.tools) payload.tools = payload.tools.map((t: any) => t?.name ? { type: "function", function: { name: t.name, description: t.description, parameters: t.input_schema } } : t);
   return payload;
 }
 
