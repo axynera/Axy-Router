@@ -94,10 +94,10 @@ async function callCandidate(item: { provider: "openai" | "anthropic"; upstream:
   }
 }
 
-async function judgeAnswers(config: any, answers: Candidate[], originalBody: any, signal: AbortSignal): Promise<string> {
+async function judgeAnswers(config: any, answers: Candidate[], originalBody: any, clientKey: ClientKey | null, signal: AbortSignal): Promise<string> {
   if (!config.judge) return answers[0]?.answer || "";
   const judgeUpstream = [...getActiveUpstreamKeys("openai"), ...getActiveUpstreamKeys("anthropic")]
-    .find((u) => u.id === config.judge.upstreamId && allowed(null, u));
+    .find((u) => u.id === config.judge.upstreamId && u.provider === config.judge.provider && allowed(clientKey, u));
   if (!judgeUpstream) return answers[0]?.answer || "";
 
   const prompt = [
@@ -155,7 +155,7 @@ export async function handleComboJudge(
 
   let finalAnswer = answers[0]!.answer;
   if (answers.length > 1 && config.judge) {
-    try { finalAnswer = await judgeAnswers(config, answers, body, signal); } catch {}
+    try { finalAnswer = await judgeAnswers(config, answers, body, clientKey, signal); } catch {}
   }
 
   const publicModel = config.name;
