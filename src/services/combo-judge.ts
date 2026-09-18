@@ -6,7 +6,18 @@ type Candidate = {
   upstream: UpstreamKey;
   model: string;
   answer: string;
+  turns: number;
 };
+
+type CandidateResult = {
+  answer: string;
+  truncated: boolean;
+  finishReason?: string;
+};
+
+const MAX_CONTINUES = 6;
+const MAX_TOTAL_OUTPUT = 60000;
+const CANDIDATE_TIMEOUT_MS = 45000;
 
 function allowed(clientKey: ClientKey | null, upstream: UpstreamKey) {
   if (!clientKey) return true;
@@ -33,7 +44,33 @@ function extractAnthropic(data: any): string {
   return typeof data?.content === "string" ? data.content : "";
 }
 
-function toAnthropicBody(body: any, model: string) {
+function isTruncated(provider: "openai" | "anthropic", data: any, answer: string) {
+  const reason = provider === "anthropic"
+    ? String(data?.stop_reason || "").toLowerCase()
+    : String(data?.choices?.[0]?.finish_reason || "").toLowerCase();
+  return reason === "length" || reason === "max_tokens" || reason === "max_output_tokens" ||
+    answer.endsWith("…") || answer.endsWith("...");
+}
+
+function toAnthropicContent(content: any): any {
+  if (typeof content === "string") return content;
+  if (!Array.isArray(content)) return String(content ?? "");
+  return content.map((x: any) => {
+    if (typeof x === "string") return { type: "text", text: x };
+    if (x?.type === "text") return x;
+    if (x?.type === "image_url" && x?.image_url?.url) {
+      const url = String(x.image_url.url);
+      if (url.startsWith("data:")) {
+        const match = url.match(/^data:([^;]+);base64,(.+)$/);
+        if (match) return { type: "image", source: { type: "base64", media_type: match[1], data: match[2] } };
+      }
+      return { type: "image", source: { type: "url", url } };
+    }
+    return x;
+  });
+}
+
+function toAnthropicBody(body: any, model: string, continuation?: { answer: string; instruction: string }) {
   const messages = Array.isArray(body?.messages) ? body.messages : [];
   const systemParts: string[] = [];
   const out: any[] = [];
@@ -45,31 +82,50 @@ function toAnthropicBody(body: any, model: string) {
     }
     out.push({
       role: m?.role === "assistant" ? "assistant" : "user",
-      content: typeof m?.content === "string" ? m.content : JSON.stringify(m?.content ?? "")
+      content: toAnthropicContent(m?.content)
     });
+  }
+  if (continuation) {
+    out.push({ role: "assistant", content: continuation.answer });
+    out.push({ role: "user", content: continuation.instruction });
   }
   return {
     model,
-    max_tokens: Number(body?.max_tokens || body?.max_output_tokens || 4096),
+    max_tokens: Number(body?.max_tokens || body?.max_output_tokens || 8192),
     ...(systemParts.length ? { system: systemParts.join("\n\n") } : {}),
     messages: out.length ? out : [{ role: "user", content: "Please answer the request." }],
     temperature: typeof body?.temperature === "number" ? body.temperature : undefined,
+    top_p: typeof body?.top_p === "number" ? body.top_p : undefined,
     stream: false
   };
 }
 
-async function callCandidate(item: { provider: "openai" | "anthropic"; upstream: UpstreamKey; model: string }, body: any, signal: AbortSignal): Promise<string> {
+function toOpenAIBody(body: any, model: string, continuation?: { answer: string; instruction: string }) {
+  const messages = Array.isArray(body?.messages) ? [...body.messages] : [];
+  if (continuation) {
+    messages.push({ role: "assistant", content: continuation.answer });
+    messages.push({ role: "user", content: continuation.instruction });
+  }
+  return { ...body, model, messages, stream: false };
+}
+
+async function callCandidateOnce(
+  item: { provider: "openai" | "anthropic"; upstream: UpstreamKey; model: string },
+  body: any,
+  signal: AbortSignal,
+  continuation?: { answer: string; instruction: string }
+): Promise<CandidateResult> {
   const key = getApiKeyForUpstream(item.upstream);
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 45000);
+  const timer = setTimeout(() => controller.abort(), CANDIDATE_TIMEOUT_MS);
   const abort = () => controller.abort();
   signal.addEventListener("abort", abort, { once: true });
   try {
     const isAnthropic = item.provider === "anthropic";
     const payload = isAnthropic
-      ? toAnthropicBody(body, item.model)
-      : { ...body, model: item.model, stream: false };
-    const headers: Record<string,string> = {
+      ? toAnthropicBody(body, item.model, continuation)
+      : toOpenAIBody(body, item.model, continuation);
+    const headers: Record<string, string> = {
       "Content-Type": "application/json",
       Accept: "application/json"
     };
@@ -83,15 +139,42 @@ async function callCandidate(item: { provider: "openai" | "anthropic"; upstream:
       isAnthropic ? `${getBaseUrl(item.upstream)}/v1/messages` : `${getBaseUrl(item.upstream)}/chat/completions`,
       { method: "POST", headers, body: JSON.stringify(payload), signal: controller.signal }
     );
-    if (!res.ok) throw new Error(`${item.provider} ${res.status}`);
+    if (!res.ok) {
+      const detail = (await res.text()).slice(0, 600);
+      const err: any = new Error(`${item.provider} ${res.status}: ${detail}`);
+      err.status = res.status;
+      throw err;
+    }
     const data = await res.json();
     const answer = isAnthropic ? extractAnthropic(data) : extractOpenAI(data);
     if (!answer.trim()) throw new Error("empty response");
-    return answer.slice(0, 12000);
+    return {
+      answer,
+      truncated: isTruncated(item.provider, data, answer),
+      finishReason: isAnthropic ? data?.stop_reason : data?.choices?.[0]?.finish_reason
+    };
   } finally {
     clearTimeout(timer);
     signal.removeEventListener("abort", abort);
   }
+}
+
+async function callCandidate(
+  item: { provider: "openai" | "anthropic"; upstream: UpstreamKey; model: string },
+  body: any,
+  signal: AbortSignal
+): Promise<string> {
+  let answer = "";
+  let turns = 0;
+  let result = await callCandidateOnce(item, body, signal);
+  answer = result.answer;
+  while (result.truncated && turns < MAX_CONTINUES && answer.length < MAX_TOTAL_OUTPUT) {
+    turns++;
+    const instruction = "Continue exactly from where you stopped. Do not repeat previous text. Continue the requested answer/code until it is complete. If you are finished, stop.";
+    result = await callCandidateOnce(item, body, signal, { answer, instruction });
+    answer += result.answer;
+  }
+  return answer.slice(0, MAX_TOTAL_OUTPUT);
 }
 
 async function judgeAnswers(config: any, answers: Candidate[], originalBody: any, clientKey: ClientKey | null, signal: AbortSignal): Promise<string> {
@@ -103,7 +186,7 @@ async function judgeAnswers(config: any, answers: Candidate[], originalBody: any
   const prompt = [
     "You are the final answer judge for a multi-model AI gateway.",
     "Produce ONE best final answer to the user's request using the candidate answers below.",
-    "Do not mention the gateway, candidates, providers, or judging process. Do not say which model answered.",
+    "Do not mention the gateway, candidates, providers, or judging process.",
     "",
     "USER REQUEST:",
     JSON.stringify(originalBody?.messages || []),
@@ -114,7 +197,7 @@ async function judgeAnswers(config: any, answers: Candidate[], originalBody: any
   const synthetic = {
     model: cleanModel(config.judge.model),
     messages: [{ role: "system", content: "Return only the final answer, with no meta-commentary." }, { role: "user", content: prompt }],
-    max_tokens: Math.min(Number(originalBody?.max_tokens || 8192), 8192),
+    max_tokens: Math.min(Number(originalBody?.max_tokens || originalBody?.max_output_tokens || 8192), 8192),
     temperature: 0.2,
     stream: false
   };
@@ -141,7 +224,7 @@ export async function handleCombo(
   }).filter(Boolean) as Array<{provider:"openai"|"anthropic";upstream:UpstreamKey;model:string}>;
 
   if (!candidates.length) {
-    return new Response(JSON.stringify({ error: { message: "Combo Judge has no permitted active AI models.", type: "router_error", code: "combo_no_models" } }), { status: 503, headers: { "Content-Type": "application/json" } });
+    return new Response(JSON.stringify({ error: { message: "Combo has no permitted active AI models.", type: "router_error", code: "combo_no_models" } }), { status: 503, headers: { "Content-Type": "application/json" } });
   }
 
   let answers: Candidate[] = [];
@@ -151,28 +234,29 @@ export async function handleCombo(
     g.__meowComboRR = g.__meowComboRR || {};
     const index = Number(g.__meowComboRR[indexKey] || 0) % candidates.length;
     g.__meowComboRR[indexKey] = (index + 1) % candidates.length;
-    try {
-      const answer = await callCandidate(candidates[index]!, body, signal);
-      answers = [{ ...candidates[index]!, answer }];
-    } catch {
-      for (let offset = 1; offset < candidates.length; offset++) {
-        const candidate = candidates[(index + offset) % candidates.length]!;
-        try { answers = [{ ...candidate, answer: await callCandidate(candidate, body, signal) }]; break; } catch {}
-      }
+    for (let offset = 0; offset < candidates.length; offset++) {
+      const candidate = candidates[(index + offset) % candidates.length]!;
+      try {
+        answers = [{ ...candidate, answer: await callCandidate(candidate, body, signal), turns: 0 }];
+        break;
+      } catch {}
     }
   } else if (config.mode === "fallback") {
     for (const candidate of candidates) {
-      try { answers = [{ ...candidate, answer: await callCandidate(candidate, body, signal) }]; break; } catch {}
+      try {
+        answers = [{ ...candidate, answer: await callCandidate(candidate, body, signal), turns: 0 }];
+        break;
+      } catch {}
     }
   } else {
     const results = await Promise.allSettled(candidates.map(c => callCandidate(c, body, signal)));
     answers = results.flatMap((r, i) =>
-      r.status === "fulfilled" && r.value ? [{ ...candidates[i], answer: r.value }] : []
+      r.status === "fulfilled" && r.value ? [{ ...candidates[i], answer: r.value, turns: 0 }] : []
     );
   }
 
   if (!answers.length) {
-    return new Response(JSON.stringify({ error: { message: "All Combo upstreams failed.", type: "upstream_error", code: "combo_all_failed" } }), { status: 502, headers: { "Content-Type": "application/json" } });
+    return new Response(JSON.stringify({ error: { message: "All Combo upstreams failed, timed out, or hit their output limits.", type: "upstream_error", code: "combo_all_failed" } }), { status: 502, headers: { "Content-Type": "application/json" } });
   }
 
   let finalAnswer = answers[0]!.answer;
