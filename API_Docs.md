@@ -1,6 +1,6 @@
-# Neko-Router API Documentation
+# Meow-Router API Documentation
 
-Comprehensive API integration documentation for **Neko-Router**, a high-performance, ultra-low overhead AI Gateway & Router featuring stream-passthrough architecture designed for **OpenAI** and **Anthropic Claude** compatible endpoints.
+Comprehensive API integration documentation for **Meow-Router**, a high-performance, ultra-low overhead AI Gateway & Router featuring stream-passthrough architecture designed for **OpenAI** and **Anthropic Claude** compatible endpoints.
 
 ---
 
@@ -32,7 +32,7 @@ Comprehensive API integration documentation for **Neko-Router**, a high-performa
 
 ## 1. Overview & Base URLs
 
-Neko-Router acts as an intelligent, ultra-fast middleman between your client applications and upstream AI providers (OpenAI, Anthropic, Ollama, vLLM, OpenRouter, etc.).
+Meow-Router acts as an intelligent, ultra-fast middleman between your client applications and upstream AI providers (OpenAI, Anthropic, Ollama, vLLM, OpenRouter, etc.).
 
 - **Default Server Base URL:** `http://localhost:3000`
 - **OpenAI-Compatible Base URL:** `http://localhost:3000/v1`
@@ -45,7 +45,7 @@ Neko-Router acts as an intelligent, ultra-fast middleman between your client app
 
 ### A. AI Completions & Proxy Keys (`sk-...`)
 Used by client applications and standard AI SDKs to execute AI proxy requests (`/v1/chat/completions`, `/v1/models`, `/v1/messages`).
-- **Format:** Standard `sk-...` format (e.g. `sk-neko-7x8a9b2c...`).
+- **Format:** Standard `sk-...` format (e.g. `sk-meow-7x8a9b2c...`).
 - **Header:** `Authorization: Bearer sk-...` or `x-api-key: sk-...`
 
 ### B. Router Management Interface Keys (`x-api-key`)
@@ -140,7 +140,7 @@ Supports the native Anthropic Claude Messages protocol for both non-streaming an
   "model": "claude-3-5-sonnet-20241022",
   "max_tokens": 1024,
   "messages": [
-    { "role": "user", "content": "Hello Claude via Neko-Router!" }
+    { "role": "user", "content": "Hello Claude via Meow-Router!" }
   ],
   "stream": true
 }
@@ -159,9 +159,9 @@ Supports the native Anthropic Claude Messages protocol for both non-streaming an
 ```python
 from openai import OpenAI
 
-# Simply configure base_url to point to Neko-Router /v1
+# Simply configure base_url to point to Meow-Router /v1
 client = OpenAI(
-    api_key="sk-neko-your-client-key-here",
+    api_key="sk-meow-your-client-key-here",
     base_url="http://localhost:3000/v1"
 )
 
@@ -185,7 +185,7 @@ for chunk in stream:
 import OpenAI from "openai";
 
 const client = new OpenAI({
-  apiKey: "sk-neko-your-client-key-here",
+  apiKey: "sk-meow-your-client-key-here",
   baseURL: "http://localhost:3000/v1",
 });
 
@@ -212,7 +212,7 @@ main();
 import Anthropic from "@anthropic-ai/sdk";
 
 const client = new Anthropic({
-  apiKey: "sk-neko-your-client-key-here",
+  apiKey: "sk-meow-your-client-key-here",
   baseURL: "http://localhost:3000",
 });
 
@@ -220,7 +220,7 @@ async function main() {
   const stream = await client.messages.create({
     model: "claude-3-5-sonnet-20241022",
     max_tokens: 1024,
-    messages: [{ role: "user", content: "Hello Claude via Neko-Router!" }],
+    messages: [{ role: "user", content: "Hello Claude via Meow-Router!" }],
     stream: true,
   });
 
@@ -242,7 +242,7 @@ main();
 import anthropic
 
 client = anthropic.Anthropic(
-    api_key="sk-neko-your-client-key-here",
+    api_key="sk-meow-your-client-key-here",
     base_url="http://localhost:3000"
 )
 
@@ -263,7 +263,7 @@ with client.messages.stream(
 ```bash
 curl -N http://localhost:3000/v1/chat/completions \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer sk-neko-your-client-key-here" \
+  -H "Authorization: Bearer sk-meow-your-client-key-here" \
   -d '{
     "model": "gpt-4o",
     "stream": true,
@@ -277,7 +277,7 @@ curl -N http://localhost:3000/v1/chat/completions \
 ```bash
 curl http://localhost:3000/v1/messages \
   -H "Content-Type: application/json" \
-  -H "x-api-key: sk-neko-your-client-key-here" \
+  -H "x-api-key: sk-meow-your-client-key-here" \
   -d '{
     "model": "claude-3-5-haiku-20241022",
     "max_tokens": 256,
@@ -291,7 +291,7 @@ curl http://localhost:3000/v1/messages \
 
 ### F. Elysia Eden Treaty (TypeScript)
 
-If you are building a custom Web Dashboard, mobile app, microservice, or CLI tool with TypeScript/JavaScript, you can consume Neko-Router with **100% end-to-end type safety and autocomplete** using `@elysiajs/eden`:
+If you are building a custom Web Dashboard, mobile app, microservice, or CLI tool with TypeScript/JavaScript, you can consume Meow-Router with **100% end-to-end type safety and autocomplete** using `@elysiajs/eden`:
 
 #### 1. Installation:
 ```bash
@@ -300,7 +300,7 @@ bun add @elysiajs/eden
 npm install @elysiajs/eden
 ```
 
-#### 2. Usage with Neko-Router `App` Type:
+#### 2. Usage with Meow-Router `App` Type:
 ```typescript
 import { treaty } from "@elysiajs/eden";
 import type { App } from "./src/index"; // or export type from your build
@@ -345,7 +345,7 @@ const { data: newKey } = await api.api.keys.post(
     },
   }
 );
-console.log("Generated Key:", newKey?.key); // "sk-neko-..."
+console.log("Generated Key:", newKey?.key); // "sk-meow-..."
 ```
 
 ---
@@ -407,8 +407,8 @@ All `/api/*` management endpoints can be authenticated via an **Admin Session Co
       {
         "id": "ck_abc123",
         "name": "Production Web App",
-        "key": "sk-neko-8d72fa98bc1e4f...",
-        "displayKey": "sk-neko-...e4f",
+        "key": "sk-meow-8d72fa98bc1e4f...",
+        "displayKey": "sk-meow-...e4f",
         "isActive": 1,
         "rateLimit": 60,
         "tokenLimit": 5000000,
@@ -428,7 +428,7 @@ All `/api/*` management endpoints can be authenticated via an **Admin Session Co
   ```json
   {
     "name": "Chatbot Backend",
-    "customKey": "sk-neko-custom-string",
+    "customKey": "sk-meow-custom-string",
     "rateLimit": 100,
     "tokenLimit": 1000000
   }
@@ -461,12 +461,12 @@ Modifies key properties, token quota limiter, sliding rate limiter, or adjusts c
   - `resetUsedTokens`: Resets used token counter to `0`.
 
 #### 4. Rotate / Regenerate Secret Key
-Immediately invalidates the current `sk-neko-...` key and generates a new key string (or assigns a custom key).
+Immediately invalidates the current `sk-meow-...` key and generates a new key string (or assigns a custom key).
 - **`POST /api/keys/:id/rotate`** *(Alias: `POST /api/keys/:id/regenerate`)*
 - **Body (optional):**
   ```json
   {
-    "customKey": "sk-neko-my-new-secret"
+    "customKey": "sk-meow-my-new-secret"
   }
   ```
 - **Response:**
@@ -474,8 +474,8 @@ Immediately invalidates the current `sk-neko-...` key and generates a new key st
   {
     "success": true,
     "message": "Secret key rotated successfully",
-    "key": "sk-neko-7x8a9b2c3d4e5f6g7h8i9j0k",
-    "displayKey": "sk-neko-7x...9j0k"
+    "key": "sk-meow-7x8a9b2c3d4e5f6g7h8i9j0k",
+    "displayKey": "sk-meow-7x...9j0k"
   }
   ```
 
@@ -504,7 +504,7 @@ Permanently deletes the secret key.
 ---
 
 ### B.2 Router Integration API Keys (`/api/router-keys`)
-Master API keys (`nr-api-...`) used to authenticate programmatic requests to Neko-Router's management APIs and manage downstream Secret Keys.
+Master API keys (`nr-api-...`) used to authenticate programmatic requests to Meow-Router's management APIs and manage downstream Secret Keys.
 
 #### 1. List Router API Keys
 - **`GET /api/router-keys`**
@@ -564,7 +564,7 @@ Master API keys (`nr-api-...`) used to authenticate programmatic requests to Nek
 
 #### 3. Generate Random Alias
 - **`GET /api/upstreams/generate-alias`**
-- **Response:** `{ "alias": "stellar-neko-92" }`
+- **Response:** `{ "alias": "stellar-meow-92" }`
 
 #### 4. Test Upstream Connectivity
 - **`POST /api/upstreams/:id/test`**
@@ -834,7 +834,7 @@ Manage upstream OpenAI and Anthropic API providers, configure multiple keys per 
 #### 1. Export SQLite Database
 - **`GET /api/admin/db/export`**
 - Executes `PRAGMA wal_checkpoint(TRUNCATE)` and streams the complete `.sqlite` snapshot.
-- **Response Headers:** `Content-Type: application/x-sqlite3`, `Content-Disposition: attachment; filename="neko-router-backup-YYYY-MM-DD-HHmm.sqlite"`
+- **Response Headers:** `Content-Type: application/x-sqlite3`, `Content-Disposition: attachment; filename="meow-router-backup-YYYY-MM-DD-HHmm.sqlite"`
 
 #### 2. Import SQLite Database
 - **`POST /api/admin/db/import`**
@@ -907,7 +907,7 @@ These optimizations are applied **globally** across all inbound OpenAI and Anthr
 
 ## 6. Response Codes & Error Handling
 
-Neko-Router adheres to standard HTTP status codes and OpenAI / Anthropic error object conventions:
+Meow-Router adheres to standard HTTP status codes and OpenAI / Anthropic error object conventions:
 
 | Status Code | Error Type | Description / Root Cause |
 |---|---|---|
@@ -926,7 +926,7 @@ Standard JSON Error Format:
 ```json
 {
   "error": {
-    "message": "No active OpenAI upstream key configured in Neko-Router",
+    "message": "No active OpenAI upstream key configured in Meow-Router",
     "type": "router_error",
     "code": "no_upstream_key"
   }
