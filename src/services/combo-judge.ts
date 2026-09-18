@@ -269,79 +269,40 @@ export async function handleCombo(
   }
 
   let answers: Candidate[] = [];
-  if (config.mode === "round_robin") {
-    const indexKey = "combo:" + (clientKey?.id || "global") + ":rr";
-    const g = globalThis as any;
-    g.__meowComboRR = g.__meowComboRR || {};
-    const index = Number(g.__meowComboRR[indexKey] || 0) % candidates.length;
-    g.__meowComboRR[indexKey] = (index + 1) % candidates.length;
-    for (let offset = 0; offset < candidates.length; offset++) {
-      const candidate = candidates[(index + offset) % candidates.length]!;
-      try {
-        {
-        const result = await callCandidate(candidate, body, signal);
-        answers = [{ ...candidate, answer: result.answer, turns: result.turns }];
-        break;
-      } catch (error) {
-        const partial = error instanceof ComboContinuationError ? error.partial : "";
-        const turns = error instanceof ComboContinuationError ? error.turns : 0;
-        if (partial && offset + 1 < candidates.length) {
-          for (let nextOffset = offset + 1; nextOffset < candidates.length; nextOffset++) {
-            const next = candidates[(index + nextOffset) % candidates.length]!;
-            try {
-              const result = await callCandidate(next, body, signal, partial, turns);
-              answers = [{ ...next, answer: result.answer, turns: result.turns }];
-              break;
-            } catch (nextError) {
-              const nextPartial = nextError instanceof ComboContinuationError ? nextError.partial : "";
-              if (nextPartial) {
-                try {
-                  const result = await callCandidate(next, body, signal, nextPartial, nextError instanceof ComboContinuationError ? nextError.turns : turns);
-                  answers = [{ ...next, answer: result.answer, turns: result.turns }];
-                  break;
-                } catch {}
-              }
-            }
-          }
-          if (answers.length) break;
-        }
-      }
-    }
-  } else if (config.mode === "fallback") {
-    for (const candidate of candidates) {
-      try {
-        const result = await callCandidate(candidate, body, signal);
-        answers = [{ ...candidate, answer: result.answer, turns: result.turns }];
-        break;
-      } catch (error) {
-        const partial = error instanceof ComboContinuationError ? error.partial : "";
-        const turns = error instanceof ComboContinuationError ? error.turns : 0;
-        if (!partial) continue;
-        for (const next of candidates.slice(candidates.indexOf(candidate) + 1)) {
-          try {
-            const result = await callCandidate(next, body, signal, partial, turns);
-            answers = [{ ...next, answer: result.answer, turns: result.turns }];
-            break;
-          } catch (nextError) {
-            const nextPartial = nextError instanceof ComboContinuationError ? nextError.partial : "";
-            if (!nextPartial) continue;
-            try {
-              const result = await callCandidate(next, body, signal, nextPartial, nextError instanceof ComboContinuationError ? nextError.turns : turns);
-              answers = [{ ...next, answer: result.answer, turns: result.turns }];
-              break;
-            } catch {}
-          }
-        }
-        if (answers.length) break;
-      }
-    }
-  } else {
+  const orderedCandidates = config.mode === "round_robin"
+    ? (() => {
+        const indexKey = "combo:" + (clientKey?.id || "global") + ":rr";
+        const g = globalThis as any;
+        g.__meowComboRR = g.__meowComboRR || {};
+        const index = Number(g.__meowComboRR[indexKey] || 0) % candidates.length;
+        g.__meowComboRR[indexKey] = (index + 1) % candidates.length;
+        return candidates.map((_, i) => candidates[(index + i) % candidates.length]!);
+      })()
+    : candidates;
+
+  if (config.mode === "judge") {
     const results = await Promise.allSettled(candidates.map(c => callCandidate(c, body, signal)));
     answers = results.flatMap((r, i) =>
       r.status === "fulfilled" && r.value?.answer
         ? [{ ...candidates[i], answer: r.value.answer, turns: r.value.turns }]
         : []
     );
+  } else {
+    let partial = "";
+    let turns = 0;
+    for (const candidate of orderedCandidates) {
+      try {
+        const result = await callCandidate(candidate, body, signal, partial, turns);
+        answers = [{ ...candidate, answer: result.answer, turns: result.turns }];
+        break;
+      } catch (error) {
+        if (error instanceof ComboContinuationError && error.partial) {
+          partial = error.partial;
+          turns = error.turns;
+          continue;
+        }
+      }
+    }
   }
 
   if (!answers.length) {
