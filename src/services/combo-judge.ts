@@ -167,22 +167,54 @@ async function callCandidateOnce(
   }
 }
 
+class ComboContinuationError extends Error {
+  partial: string;
+  turns: number;
+  constructor(message: string, partial: string, turns: number) {
+    super(message);
+    this.name = "ComboContinuationError";
+    this.partial = partial;
+    this.turns = turns;
+  }
+}
+
+async function continueCandidate(
+  item: { provider: "openai" | "anthropic"; upstream: UpstreamKey; model: string },
+  body: any,
+  signal: AbortSignal,
+  initialAnswer: string,
+  initialTurns = 0
+): Promise<{ answer: string; turns: number }> {
+  let answer = initialAnswer;
+  let turns = initialTurns;
+  let result: CandidateResult = {
+    answer,
+    truncated: true,
+    finishReason: "continuation"
+  };
+  const instruction = "Continue exactly from where you stopped. Do not repeat previous text. Continue the requested answer/code until it is complete. If you are finished, stop.";
+  while (result.truncated && turns < MAX_CONTINUES && answer.length < MAX_TOTAL_OUTPUT) {
+    turns++;
+    try {
+      result = await callCandidateOnce(item, body, signal, { answer, instruction });
+    } catch (error) {
+      throw new ComboContinuationError(String((error as Error)?.message || error), answer, turns - 1);
+    }
+    if (result.answer) answer += result.answer;
+  }
+  return { answer: answer.slice(0, MAX_TOTAL_OUTPUT), turns };
+}
+
 async function callCandidate(
   item: { provider: "openai" | "anthropic"; upstream: UpstreamKey; model: string },
   body: any,
-  signal: AbortSignal
-): Promise<string> {
-  let answer = "";
-  let turns = 0;
-  let result = await callCandidateOnce(item, body, signal);
-  answer = result.answer;
-  while (result.truncated && turns < MAX_CONTINUES && answer.length < MAX_TOTAL_OUTPUT) {
-    turns++;
-    const instruction = "Continue exactly from where you stopped. Do not repeat previous text. Continue the requested answer/code until it is complete. If you are finished, stop.";
-    result = await callCandidateOnce(item, body, signal, { answer, instruction });
-    answer += result.answer;
-  }
-  return answer.slice(0, MAX_TOTAL_OUTPUT);
+  signal: AbortSignal,
+  initialAnswer = "",
+  initialTurns = 0
+): Promise<{ answer: string; turns: number }> {
+  if (initialAnswer) return continueCandidate(item, body, signal, initialAnswer, initialTurns);
+  const result = await callCandidateOnce(item, body, signal);
+  return continueCandidate(item, body, signal, result.answer, 0);
 }
 
 async function judgeAnswers(config: any, answers: Candidate[], originalBody: any, clientKey: ClientKey | null, signal: AbortSignal): Promise<string> {
@@ -209,11 +241,12 @@ async function judgeAnswers(config: any, answers: Candidate[], originalBody: any
     temperature: 0.2,
     stream: false
   };
-  return callCandidate(
+  const result = await callCandidate(
     { provider: config.judge.provider, upstream: judgeUpstream, model: cleanModel(config.judge.model) },
     synthetic,
     signal
   );
+  return result.answer;
 }
 
 export async function handleCombo(
@@ -246,23 +279,68 @@ export async function handleCombo(
       const candidate = candidates[(index + offset) % candidates.length]!;
       try {
         {
-        const answer = await callCandidate(candidate, body, signal);
-        answers = [{ ...candidate, answer, turns: 0 }];
-      }
+        const result = await callCandidate(candidate, body, signal);
+        answers = [{ ...candidate, answer: result.answer, turns: result.turns }];
         break;
-      } catch {}
+      } catch (error) {
+        const partial = error instanceof ComboContinuationError ? error.partial : "";
+        const turns = error instanceof ComboContinuationError ? error.turns : 0;
+        if (partial && offset + 1 < candidates.length) {
+          for (let nextOffset = offset + 1; nextOffset < candidates.length; nextOffset++) {
+            const next = candidates[(index + nextOffset) % candidates.length]!;
+            try {
+              const result = await callCandidate(next, body, signal, partial, turns);
+              answers = [{ ...next, answer: result.answer, turns: result.turns }];
+              break;
+            } catch (nextError) {
+              const nextPartial = nextError instanceof ComboContinuationError ? nextError.partial : "";
+              if (nextPartial) {
+                try {
+                  const result = await callCandidate(next, body, signal, nextPartial, nextError instanceof ComboContinuationError ? nextError.turns : turns);
+                  answers = [{ ...next, answer: result.answer, turns: result.turns }];
+                  break;
+                } catch {}
+              }
+            }
+          }
+          if (answers.length) break;
+        }
+      }
     }
   } else if (config.mode === "fallback") {
     for (const candidate of candidates) {
       try {
-        answers = [{ ...candidate, answer: await callCandidate(candidate, body, signal), turns: 0 }];
+        const result = await callCandidate(candidate, body, signal);
+        answers = [{ ...candidate, answer: result.answer, turns: result.turns }];
         break;
-      } catch {}
+      } catch (error) {
+        const partial = error instanceof ComboContinuationError ? error.partial : "";
+        const turns = error instanceof ComboContinuationError ? error.turns : 0;
+        if (!partial) continue;
+        for (const next of candidates.slice(candidates.indexOf(candidate) + 1)) {
+          try {
+            const result = await callCandidate(next, body, signal, partial, turns);
+            answers = [{ ...next, answer: result.answer, turns: result.turns }];
+            break;
+          } catch (nextError) {
+            const nextPartial = nextError instanceof ComboContinuationError ? nextError.partial : "";
+            if (!nextPartial) continue;
+            try {
+              const result = await callCandidate(next, body, signal, nextPartial, nextError instanceof ComboContinuationError ? nextError.turns : turns);
+              answers = [{ ...next, answer: result.answer, turns: result.turns }];
+              break;
+            } catch {}
+          }
+        }
+        if (answers.length) break;
+      }
     }
   } else {
     const results = await Promise.allSettled(candidates.map(c => callCandidate(c, body, signal)));
     answers = results.flatMap((r, i) =>
-      r.status === "fulfilled" && r.value ? [{ ...candidates[i], answer: r.value, turns: 0 }] : []
+      r.status === "fulfilled" && r.value?.answer
+        ? [{ ...candidates[i], answer: r.value.answer, turns: r.value.turns }]
+        : []
     );
   }
 
