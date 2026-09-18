@@ -403,8 +403,8 @@ export const DatabaseSettingsTab: React.FC = () => {
         <div className="flex items-center gap-3"><button type="button" onClick={saveCombo} disabled={comboSaving} className="px-4 py-2 rounded-md skeuo-btn-primary text-xs font-semibold disabled:opacity-50">{comboSaving ? "Saving..." : "Save Combo"}</button>{comboStatus && <span className="text-xs text-zinc-500">{comboStatus}</span>}</div>
       </div>
 
-      {/* Global Prompt & Token Optimizers Card */
-      <div className="skeuo-card p-6 space-y-6">
+      {/* Global Prompt & Token Optimizers Card */}
+            <div className="skeuo-card p-6 space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-zinc-200 dark:border-zinc-800">
           <div className="flex items-center space-x-2.5">
             <div className="p-2 rounded-md bg-amber-500/10 text-amber-600 dark:text-amber-400">
