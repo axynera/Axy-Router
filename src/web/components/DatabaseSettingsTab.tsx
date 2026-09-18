@@ -15,6 +15,8 @@ import {
   Flame,
   ShieldCheck,
   Clock,
+  Globe,
+  Copy,
 } from "lucide-react";
 import { apiRequest, type SystemInfo, type OptimizationSettings } from "../lib/api";
 
@@ -66,6 +68,54 @@ export const DatabaseSettingsTab: React.FC = () => {
   const [confirmPin, setConfirmPin] = useState("");
   const [pinStatus, setPinStatus] = useState<{ success?: boolean; message?: string } | null>(null);
   const [pinSubmitting, setPinSubmitting] = useState(false);
+
+  // Custom domain / public API URL
+  const [customDomain, setCustomDomain] = useState("");
+  const [activeApiBaseUrl, setActiveApiBaseUrl] = useState("");
+  const [domainSaving, setDomainSaving] = useState(false);
+  const [domainStatus, setDomainStatus] = useState<{ success?: boolean; message?: string } | null>(null);
+
+  const loadDomain = async () => {
+    try {
+      const data = await apiRequest<{ customDomain: string; apiBaseUrl: string }>("/api/admin/domain");
+      setCustomDomain(data.customDomain || "");
+      setActiveApiBaseUrl(data.apiBaseUrl || "");
+    } catch (e) {
+      console.error("Failed to load custom domain:", e);
+    }
+  };
+
+  const saveDomain = async () => {
+    setDomainSaving(true);
+    setDomainStatus(null);
+    try {
+      const data = await apiRequest<{ success: boolean; customDomain: string; apiBaseUrl: string | null }>("/api/admin/domain", {
+        method: "POST",
+        body: JSON.stringify({ domain: customDomain }),
+      });
+      setCustomDomain(data.customDomain || "");
+      setActiveApiBaseUrl(data.apiBaseUrl || "");
+      setDomainStatus({
+        success: true,
+        message: data.customDomain ? "Custom domain saved." : "Custom domain removed. Using deployment URL.",
+      });
+    } catch (e: any) {
+      setDomainStatus({ success: false, message: e.message || "Failed to save custom domain." });
+    } finally {
+      setDomainSaving(false);
+    }
+  };
+
+  const copyApiBaseUrl = async () => {
+    if (!activeApiBaseUrl) return;
+    try {
+      await navigator.clipboard.writeText(activeApiBaseUrl);
+      setDomainStatus({ success: true, message: "API base URL copied." });
+      setTimeout(() => setDomainStatus(null), 2500);
+    } catch {
+      // Clipboard may be unavailable in some browsers.
+    }
+  };
 
   // Import DB state
   const [importing, setImporting] = useState(false);
@@ -125,6 +175,7 @@ export const DatabaseSettingsTab: React.FC = () => {
   useEffect(() => {
     loadSystemInfo();
     loadOptimizations();
+    loadDomain();
   }, []);
 
   const handleChangePin = async (e: React.FormEvent) => {
@@ -217,6 +268,87 @@ export const DatabaseSettingsTab: React.FC = () => {
         <p className="text-xs text-zinc-500 dark:text-zinc-400">
           Configure global prompt compression, token caching engines, database backups, and security credentials.
         </p>
+      </div>
+
+      {/* Custom Domain Card */}
+      <div className="skeuo-card p-6 space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-zinc-200 dark:border-zinc-800">
+          <div className="flex items-center space-x-2.5">
+            <div className="p-2 rounded-md bg-blue-500/10 text-blue-600 dark:text-blue-400">
+              <Globe className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="text-sm font-bold text-zinc-900 dark:text-zinc-100">Custom Domain</h3>
+              <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                Set the public URL displayed by Axy-Router without changing your Koyeb deployment.
+              </p>
+            </div>
+          </div>
+          {domainStatus && (
+            <span className={`text-[11px] font-medium ${domainStatus.success ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>
+              {domainStatus.message}
+            </span>
+          )}
+        </div>
+
+        <div className="space-y-3">
+          <div>
+            <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1.5">
+              Public Custom Domain
+            </label>
+            <input
+              type="text"
+              value={customDomain}
+              onChange={(e) => setCustomDomain(e.target.value)}
+              placeholder="https://api.example.com"
+              className="w-full px-3 py-2.5 rounded-md skeuo-inset text-zinc-900 dark:text-zinc-100 font-mono text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
+            />
+            <p className="mt-1.5 text-[10px] text-zinc-500 dark:text-zinc-400">
+              Enter a domain or full URL. Leave empty to use the Koyeb/deployment URL.
+            </p>
+          </div>
+
+          <div className="flex flex-col sm:flex-row gap-2">
+            <button
+              type="button"
+              onClick={saveDomain}
+              disabled={domainSaving}
+              className="skeuo-btn-primary px-4 py-2 rounded-md text-xs font-semibold disabled:opacity-50"
+            >
+              {domainSaving ? "Saving..." : "Save Domain"}
+            </button>
+            <button
+              type="button"
+              onClick={() => setCustomDomain("")}
+              className="skeuo-btn px-4 py-2 rounded-md text-xs font-medium text-zinc-600 dark:text-zinc-300"
+            >
+              Reset
+            </button>
+          </div>
+
+          <div className="pt-3 border-t border-zinc-200 dark:border-zinc-800">
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <span className="block text-[10px] uppercase tracking-wider font-bold text-zinc-400">Active API Base URL</span>
+                <code className="block mt-1 text-xs font-mono text-zinc-800 dark:text-zinc-200 truncate">
+                  {activeApiBaseUrl || "Loading..."}
+                </code>
+              </div>
+              <button
+                type="button"
+                onClick={copyApiBaseUrl}
+                disabled={!activeApiBaseUrl}
+                className="skeuo-btn p-2 rounded-md shrink-0 disabled:opacity-40"
+                title="Copy API base URL"
+              >
+                <Copy className="w-3.5 h-3.5" />
+              </button>
+            </div>
+            <p className="mt-2 text-[10px] text-amber-600 dark:text-amber-400">
+              Display/configuration only: DNS and reverse-proxy setup are still required for the custom domain to actually reach this server.
+            </p>
+          </div>
+        </div>
       </div>
 
       {/* Global Prompt & Token Optimizers Card */}
