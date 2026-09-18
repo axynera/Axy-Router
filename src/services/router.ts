@@ -277,6 +277,63 @@ export function selectUpstreamKey(
   return { upstream: eligibleKeys[currentIndex] ?? eligibleKeys[0] ?? null };
 }
 
+export interface OmniSelectionResult {
+  upstream: UpstreamKey | null;
+  model: string | null;
+  error?: "no_upstreams" | "no_allowed_providers" | "no_models";
+  message?: string;
+}
+
+/**
+ * Virtual "Omni" router: treats every enabled model on every permitted upstream
+ * as one logical model pool. The client sends model=omni (or axynity-omni),
+ * while Axy-Router chooses the concrete provider/model internally.
+ */
+export function selectOmniUpstream(
+  provider: "openai" | "anthropic",
+  clientKey?: { id: string; name: string; allowedProviders?: string | null } | null
+): OmniSelectionResult {
+  const allActive = getActiveUpstreamKeys(provider);
+  if (allActive.length === 0) {
+    return { upstream: null, model: null, error: "no_upstreams", message: `No active ${provider.toUpperCase()} upstream providers configured in Axy-Router.` };
+  }
+
+  let eligible = allActive;
+  if (clientKey) {
+    const allowedIds = parseAllowedProviders(clientKey.allowedProviders);
+    if (allowedIds.length === 0) {
+      return { upstream: null, model: null, error: "no_allowed_providers", message: `Client Key "${clientKey.name}" has no permitted upstream providers.` };
+    }
+    eligible = allActive.filter((u) => allowedIds.includes(u.id) || allowedIds.includes(u.provider));
+    if (eligible.length === 0) {
+      return { upstream: null, model: null, error: "no_allowed_providers", message: `Client Key "${clientKey.name}" does not have permission to access any active providers.` };
+    }
+  }
+
+  const candidates: Array<{ upstream: UpstreamKey; model: string }> = [];
+  for (const upstream of eligible) {
+    if (Boolean((upstream as any).followUpstream)) continue;
+    const models = parseUpstreamModels(upstream.models);
+    for (const m of models) {
+      if (!m.enabled || !m.id) continue;
+      const lower = String(m.id).toLowerCase();
+      if (lower.includes("embedding")) continue;
+      const clean = String(m.id).includes("/") ? String(m.id).split("/").slice(1).join("/") : String(m.id);
+      candidates.push({ upstream, model: clean });
+    }
+  }
+
+  if (candidates.length === 0) {
+    return { upstream: null, model: null, error: "no_models", message: "Omni has no enabled chat models in the permitted upstream pool." };
+  }
+
+  const key = `${clientKey?.id || "global"}:${provider}:omni`;
+  const index = (providerModelRotationIndex[key] || 0) % candidates.length;
+  providerModelRotationIndex[key] = (index + 1) % candidates.length;
+  const selected = candidates[index] || candidates[0];
+  return { upstream: selected.upstream, model: selected.model };
+}
+
 export function getBaseUrl(upstream: UpstreamKey): string {
   if (upstream.baseUrl && upstream.baseUrl.trim().length > 0) {
     return upstream.baseUrl.replace(/\/+$/, "");
