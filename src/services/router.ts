@@ -285,8 +285,8 @@ export interface OmniSelectionResult {
 }
 
 /**
- * Virtual "Omni" router: treats every enabled model on every permitted upstream
- * as one logical model pool. The client sends model=omni (or axynity-omni),
+ * Virtual combo router: treats every enabled model on every permitted upstream
+ * as one logical model pool. The public model name is configurable by settings,
  * while Axy-Router chooses the concrete provider/model internally.
  */
 export function selectOmniUpstream(
