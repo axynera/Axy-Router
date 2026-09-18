@@ -48,7 +48,7 @@ export const Header: React.FC<HeaderProps> = ({
             <div>
               <div className="flex items-center space-x-2">
                 <span className="font-bold text-lg tracking-tight text-zinc-900 dark:text-zinc-100">
-                  Neko<span className="text-zinc-400 dark:text-zinc-500 font-light">Router</span>
+                  Meow<span className="text-zinc-400 dark:text-zinc-500 font-light">Router</span>
                 </span>
                 <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
                   <Radio className="w-2.5 h-2.5 mr-1 animate-pulse" />
