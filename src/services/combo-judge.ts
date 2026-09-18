@@ -15,9 +15,11 @@ type CandidateResult = {
   finishReason?: string;
 };
 
-const MAX_CONTINUES = 6;
-const MAX_TOTAL_OUTPUT = 60000;
+const MAX_CONTINUES = 8;
+const MAX_TOTAL_OUTPUT = 100000;
 const CANDIDATE_TIMEOUT_MS = 45000;
+const MAX_CONTINUE_CONTEXT = 12000;
+const MAX_JUDGE_OUTPUT = 16384;
 
 function allowed(clientKey: ClientKey | null, upstream: UpstreamKey) {
   if (!clientKey) return true;
@@ -80,30 +82,36 @@ function toAnthropicBody(body: any, model: string, continuation?: { answer: stri
       else if (Array.isArray(m.content)) systemParts.push(m.content.map((x: any) => x?.text || "").join(""));
       continue;
     }
-    out.push({
-      role: m?.role === "assistant" ? "assistant" : "user",
-      content: toAnthropicContent(m?.content)
-    });
+    out.push({ role: m?.role === "assistant" ? "assistant" : "user", content: toAnthropicContent(m?.content) });
   }
   if (continuation) {
-    out.push({ role: "assistant", content: continuation.answer });
+    const context = continuation.answer.length > MAX_CONTINUE_CONTEXT
+      ? continuation.answer.slice(-MAX_CONTINUE_CONTEXT)
+      : continuation.answer;
+    out.push({ role: "assistant", content: context });
     out.push({ role: "user", content: continuation.instruction });
   }
-  return {
+  const payload: any = {
     model,
     max_tokens: Number(body?.max_tokens || body?.max_output_tokens || 8192),
     ...(systemParts.length ? { system: systemParts.join("\n\n") } : {}),
     messages: out.length ? out : [{ role: "user", content: "Please answer the request." }],
-    temperature: typeof body?.temperature === "number" ? body.temperature : undefined,
-    top_p: typeof body?.top_p === "number" ? body.top_p : undefined,
     stream: false
   };
+  if (typeof body?.temperature === "number") payload.temperature = body.temperature;
+  if (typeof body?.top_p === "number") payload.top_p = body.top_p;
+  if (body?.stop_sequences) payload.stop_sequences = body.stop_sequences;
+  if (body?.metadata) payload.metadata = body.metadata;
+  return payload;
 }
 
 function toOpenAIBody(body: any, model: string, continuation?: { answer: string; instruction: string }) {
   const messages = Array.isArray(body?.messages) ? [...body.messages] : [];
   if (continuation) {
-    messages.push({ role: "assistant", content: continuation.answer });
+    const context = continuation.answer.length > MAX_CONTINUE_CONTEXT
+      ? continuation.answer.slice(-MAX_CONTINUE_CONTEXT)
+      : continuation.answer;
+    messages.push({ role: "assistant", content: context });
     messages.push({ role: "user", content: continuation.instruction });
   }
   return { ...body, model, messages, stream: false };
@@ -197,7 +205,7 @@ async function judgeAnswers(config: any, answers: Candidate[], originalBody: any
   const synthetic = {
     model: cleanModel(config.judge.model),
     messages: [{ role: "system", content: "Return only the final answer, with no meta-commentary." }, { role: "user", content: prompt }],
-    max_tokens: Math.min(Number(originalBody?.max_tokens || originalBody?.max_output_tokens || 8192), 8192),
+    max_tokens: Math.min(Number(originalBody?.max_tokens || originalBody?.max_output_tokens || 8192), MAX_JUDGE_OUTPUT),
     temperature: 0.2,
     stream: false
   };
@@ -237,7 +245,10 @@ export async function handleCombo(
     for (let offset = 0; offset < candidates.length; offset++) {
       const candidate = candidates[(index + offset) % candidates.length]!;
       try {
-        answers = [{ ...candidate, answer: await callCandidate(candidate, body, signal), turns: 0 }];
+        {
+        const answer = await callCandidate(candidate, body, signal);
+        answers = [{ ...candidate, answer, turns: 0 }];
+      }
         break;
       } catch {}
     }
@@ -260,8 +271,10 @@ export async function handleCombo(
   }
 
   let finalAnswer = answers[0]!.answer;
-  if (config.mode === "judge" && answers.length > 1 && config.judge) {
-    try { finalAnswer = await judgeAnswers(config, answers, body, clientKey, signal); } catch {}
+  if (config.mode === "judge" && config.judge) {
+    try {
+      finalAnswer = await judgeAnswers(config, answers, body, clientKey, signal);
+    } catch {}
   }
 
   const publicModel = config.name;
