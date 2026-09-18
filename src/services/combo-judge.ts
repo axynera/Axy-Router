@@ -125,14 +125,14 @@ async function judgeAnswers(config: any, answers: Candidate[], originalBody: any
   );
 }
 
-export async function handleComboJudge(
+export async function handleCombo(
   protocol: "openai" | "anthropic",
   body: any,
   clientKey: ClientKey | null,
   signal: AbortSignal
 ): Promise<Response | null> {
   const config = getComboConfig();
-  if (!config.name || config.mode !== "judge" || !Array.isArray(config.models) || config.models.length === 0) return null;
+  if (!config.name || !Array.isArray(config.models) || config.models.length === 0) return null;
 
   const all = [...getActiveUpstreamKeys("openai"), ...getActiveUpstreamKeys("anthropic")];
   const candidates = config.models.map((m: any) => {
@@ -144,17 +144,39 @@ export async function handleComboJudge(
     return new Response(JSON.stringify({ error: { message: "Combo Judge has no permitted active AI models.", type: "router_error", code: "combo_no_models" } }), { status: 503, headers: { "Content-Type": "application/json" } });
   }
 
-  const started = Date.now();
-  const results = await Promise.allSettled(candidates.map(c => callCandidate(c, body, signal)));
-  const answers: Candidate[] = results.flatMap((r, i) =>
-    r.status === "fulfilled" && r.value ? [{ ...candidates[i], answer: r.value }] : []
-  );
+  let answers: Candidate[] = [];
+  if (config.mode === "round_robin") {
+    const indexKey = "combo:" + (clientKey?.id || "global") + ":rr";
+    const g = globalThis as any;
+    g.__meowComboRR = g.__meowComboRR || {};
+    const index = Number(g.__meowComboRR[indexKey] || 0) % candidates.length;
+    g.__meowComboRR[indexKey] = (index + 1) % candidates.length;
+    try {
+      const answer = await callCandidate(candidates[index]!, body, signal);
+      answers = [{ ...candidates[index]!, answer }];
+    } catch {
+      for (let offset = 1; offset < candidates.length; offset++) {
+        const candidate = candidates[(index + offset) % candidates.length]!;
+        try { answers = [{ ...candidate, answer: await callCandidate(candidate, body, signal) }]; break; } catch {}
+      }
+    }
+  } else if (config.mode === "fallback") {
+    for (const candidate of candidates) {
+      try { answers = [{ ...candidate, answer: await callCandidate(candidate, body, signal) }]; break; } catch {}
+    }
+  } else {
+    const results = await Promise.allSettled(candidates.map(c => callCandidate(c, body, signal)));
+    answers = results.flatMap((r, i) =>
+      r.status === "fulfilled" && r.value ? [{ ...candidates[i], answer: r.value }] : []
+    );
+  }
+
   if (!answers.length) {
-    return new Response(JSON.stringify({ error: { message: "All Combo Judge upstreams failed.", type: "upstream_error", code: "combo_all_failed" } }), { status: 502, headers: { "Content-Type": "application/json" } });
+    return new Response(JSON.stringify({ error: { message: "All Combo upstreams failed.", type: "upstream_error", code: "combo_all_failed" } }), { status: 502, headers: { "Content-Type": "application/json" } });
   }
 
   let finalAnswer = answers[0]!.answer;
-  if (answers.length > 1 && config.judge) {
+  if (config.mode === "judge" && answers.length > 1 && config.judge) {
     try { finalAnswer = await judgeAnswers(config, answers, body, clientKey, signal); } catch {}
   }
 
@@ -203,6 +225,6 @@ export async function handleComboJudge(
 export async function handleComboPublicModel(protocol: "openai"|"anthropic", body:any, clientKey:ClientKey|null, signal:AbortSignal) {
   const config=getComboConfig();
   return config.name && String(body?.model||"").trim().toLowerCase() === config.name.trim().toLowerCase()
-    ? handleComboJudge(protocol, body, clientKey, signal)
+    ? handleCombo(protocol, body, clientKey, signal)
     : null;
 }
