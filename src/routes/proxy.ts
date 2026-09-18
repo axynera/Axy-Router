@@ -7,6 +7,7 @@ import {
   proxyOpenAIModels,
 } from "../services/proxy";
 import { checkHttpsRequirement } from "../services/optimizer";
+import { handleComboPublicModel } from "../services/combo-judge";
 
 const MOTIVATIONAL_QUOTES = [
   { quote: "Talk is cheap. Show me the code.", author: "Linus Torvalds" },
@@ -203,6 +204,9 @@ export const proxyRoutes = new Elysia()
       };
     }
 
+    const comboResult = await handleComboPublicModel("openai", body, clientKey, request.signal);
+    if (comboResult) return comboResult;
+
     return proxyOpenAIChatCompletions(request.headers, body, clientKey, request.signal);
   })
 
@@ -317,6 +321,9 @@ export const proxyRoutes = new Elysia()
         },
       };
     }
+
+    const comboResult = await handleComboPublicModel("anthropic", body, clientKey, request.signal);
+    if (comboResult) return comboResult;
 
     return proxyAnthropicMessages(request.headers, body, clientKey, request.signal);
   });
