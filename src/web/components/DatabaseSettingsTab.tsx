@@ -75,6 +75,38 @@ export const DatabaseSettingsTab: React.FC = () => {
   const [domainSaving, setDomainSaving] = useState(false);
   const [domainStatus, setDomainStatus] = useState<{ success?: boolean; message?: string } | null>(null);
 
+  // Combo / Omni settings
+  const [comboName, setComboName] = useState("Omni");
+  const [developerName, setDeveloperName] = useState("AxyRouter");
+  const [comboMode, setComboMode] = useState<"round_robin" | "fallback" | "judge">("round_robin");
+  const [comboModels, setComboModels] = useState("[]");
+  const [comboSaving, setComboSaving] = useState(false);
+  const [comboStatus, setComboStatus] = useState<string | null>(null);
+
+  const loadCombo = async () => {
+    try {
+      const data = await apiRequest<any>("/api/admin/combo");
+      setComboName(data.name || "Omni");
+      setDeveloperName(data.developer || "AxyRouter");
+      setComboMode(data.mode || "round_robin");
+      setComboModels(JSON.stringify(data.models || [], null, 2));
+    } catch (e) { console.error("Failed to load Combo settings:", e); }
+  };
+
+  const saveCombo = async () => {
+    setComboSaving(true); setComboStatus(null);
+    try {
+      const models = JSON.parse(comboModels);
+      await apiRequest("/api/admin/combo", {
+        method: "POST",
+        body: JSON.stringify({ name: comboName, developer: developerName, mode: comboMode, models })
+      });
+      setComboStatus("Combo settings saved.");
+    } catch (e: any) {
+      setComboStatus(e.message || "Failed to save Combo settings.");
+    } finally { setComboSaving(false); }
+  };
+
   const loadDomain = async () => {
     try {
       const data = await apiRequest<{ customDomain: string; apiBaseUrl: string }>("/api/admin/domain");
@@ -176,6 +208,7 @@ export const DatabaseSettingsTab: React.FC = () => {
     loadSystemInfo();
     loadOptimizations();
     loadDomain();
+    loadCombo();
   }, []);
 
   const handleChangePin = async (e: React.FormEvent) => {
@@ -351,7 +384,26 @@ export const DatabaseSettingsTab: React.FC = () => {
         </div>
       </div>
 
-      {/* Global Prompt & Token Optimizers Card */}
+
+      {/* Combo / Omni Manager */}
+      <div className="skeuo-card p-6 space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-zinc-200 dark:border-zinc-800">
+          <div className="flex items-center space-x-2.5">
+            <div className="p-2 rounded-md bg-violet-500/10 text-violet-600 dark:text-violet-400"><Sparkles className="w-5 h-5" /></div>
+            <div><h3 className="text-sm font-bold text-zinc-900 dark:text-zinc-100">Combo / Omni Manager</h3><p className="text-xs text-zinc-500 dark:text-zinc-400">Gabungkan banyak AI menjadi satu public model.</p></div>
+          </div>
+          <span className="text-[9px] px-2 py-1 rounded font-bold uppercase bg-violet-500/10 text-violet-600 dark:text-violet-400">Multi AI</span>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div><label className="block text-xs font-medium mb-1 text-zinc-700 dark:text-zinc-300">Public Model Name</label><input value={comboName} onChange={e=>setComboName(e.target.value)} placeholder="Omni" className="w-full px-3 py-2 rounded-md skeuo-inset text-xs font-mono" /></div>
+          <div><label className="block text-xs font-medium mb-1 text-zinc-700 dark:text-zinc-300">Developer / Creator</label><input value={developerName} onChange={e=>setDeveloperName(e.target.value)} placeholder="AxyRouter" className="w-full px-3 py-2 rounded-md skeuo-inset text-xs" /></div>
+        </div>
+        <div><label className="block text-xs font-medium mb-1 text-zinc-700 dark:text-zinc-300">Routing Mode</label><select value={comboMode} onChange={e=>setComboMode(e.target.value as any)} className="w-full px-3 py-2 rounded-md skeuo-inset text-xs"><option value="round_robin">Round Robin — rotate AI</option><option value="fallback">Fallback — next AI on failure</option><option value="judge">Judge — all AI answer, then judge</option></select></div>
+        <div><label className="block text-xs font-medium mb-1 text-zinc-700 dark:text-zinc-300">AI Pool (JSON)</label><textarea value={comboModels} onChange={e=>setComboModels(e.target.value)} rows={7} className="w-full px-3 py-2 rounded-md skeuo-inset text-[11px] font-mono" placeholder='[{"provider":"openai","upstreamId":"...","model":"..."}]' /><p className="mt-1 text-[10px] text-zinc-500">Pilih model/provider yang ikut Combo. Judge mode dirancang untuk meminta semua model memberi jawaban sebelum hasil akhir dipilih.</p></div>
+        <div className="flex items-center gap-3"><button type="button" onClick={saveCombo} disabled={comboSaving} className="px-4 py-2 rounded-md skeuo-btn-primary text-xs font-semibold disabled:opacity-50">{comboSaving ? "Saving..." : "Save Combo"}</button>{comboStatus && <span className="text-xs text-zinc-500">{comboStatus}</span>}</div>
+      </div>
+
+      {/* Global Prompt & Token Optimizers Card */
       <div className="skeuo-card p-6 space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-zinc-200 dark:border-zinc-800">
           <div className="flex items-center space-x-2.5">
