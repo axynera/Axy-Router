@@ -696,7 +696,7 @@ export const DatabaseSettingsTab: React.FC = () => {
           </div>
 
           <p className="text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed">
-            Neko-Router runs on native <code className="font-mono text-zinc-800 dark:text-zinc-200">bun:sqlite</code> with Write-Ahead Logging (<code className="font-mono text-zinc-800 dark:text-zinc-200">PRAGMA journal_mode = WAL</code>) for high concurrent throughput.
+            Meow-Router runs on native <code className="font-mono text-zinc-800 dark:text-zinc-200">bun:sqlite</code> with Write-Ahead Logging (<code className="font-mono text-zinc-800 dark:text-zinc-200">PRAGMA journal_mode = WAL</code>) for high concurrent throughput.
           </p>
 
           {importStatus && (
