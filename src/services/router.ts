@@ -334,6 +334,56 @@ export function selectOmniUpstream(
   return { upstream: selected.upstream, model: selected.model };
 }
 
+
+export interface ComboConfig {
+  name: string;
+  developer: string;
+  mode: "round_robin" | "fallback" | "judge";
+  models: Array<{ provider: "openai" | "anthropic"; upstreamId: string; model: string }>;
+  judge?: { provider: "openai" | "anthropic"; upstreamId: string; model: string };
+}
+
+export function getComboConfig(): ComboConfig {
+  const rows = db.select().from(settings).all();
+  const values = new Map(rows.map((r: any) => [String(r.key), String(r.value ?? "")]));
+  let models: ComboConfig["models"] = [];
+  let judge: ComboConfig["judge"] | undefined;
+  try {
+    const parsed = JSON.parse(values.get("combo_models") || "[]");
+    if (Array.isArray(parsed)) {
+      models = parsed.filter((m: any) =>
+        (m?.provider === "openai" || m?.provider === "anthropic") &&
+        typeof m?.upstreamId === "string" &&
+        typeof m?.model === "string" &&
+        m.model.trim()
+      );
+    }
+  } catch {}
+  try {
+    const parsed = JSON.parse(values.get("combo_judge") || "");
+    if (parsed && (parsed.provider === "openai" || parsed.provider === "anthropic") &&
+        typeof parsed.upstreamId === "string" && typeof parsed.model === "string" && parsed.model.trim()) {
+      judge = parsed;
+    }
+  } catch {}
+  const mode = values.get("combo_mode");
+  return {
+    name: values.get("combo_name")?.trim() || "",
+    developer: values.get("developer_name")?.trim() || "",
+    mode: mode === "fallback" || mode === "judge" ? mode : "round_robin",
+    models,
+    ...(judge ? { judge } : {})
+  };
+}
+
+export function isComboModel(model: string): boolean {
+  const requested = String(model || "").trim().toLowerCase();
+  const config = getComboConfig();
+  if (!requested || !config.name) return false;
+  return requested === config.name.trim().toLowerCase() ||
+    ["omni", "axynity-omni", "axynity_omni", "axynity/omni"].includes(requested);
+}
+
 export function getBaseUrl(upstream: UpstreamKey): string {
   if (upstream.baseUrl && upstream.baseUrl.trim().length > 0) {
     return upstream.baseUrl.replace(/\/+$/, "");
