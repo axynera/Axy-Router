@@ -256,16 +256,27 @@ async function callCandidateOnce(
     const endpoint = isAnthropic
       ? `${baseUrl}${baseUrl.endsWith("/v1") ? "" : "/v1"}/messages`
       : `${baseUrl}/chat/completions`;
-    const res = await fetch(endpoint, {
-      method: "POST",
-      headers,
-      body: JSON.stringify(payload),
-      signal: controller.signal
-    });
-    if (!res.ok) {
-      const detail = (await res.text()).slice(0, 600);
-      const err: any = new Error(`${item.provider} ${res.status}: ${detail}`);
-      err.status = res.status;
+    let res: Response | null = null;
+    for (let attempt = 0; attempt < 2; attempt++) {
+      res = await fetch(endpoint, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(payload),
+        signal: controller.signal
+      });
+      if (res.ok || ![408, 409, 429, 500, 502, 503, 504].includes(res.status) || attempt === 1) break;
+      const retryAfter = Number(res.headers.get("retry-after") || 0);
+      const waitMs = retryAfter > 0 ? Math.min(retryAfter * 1000, 3000) : 250 * (attempt + 1);
+      await new Promise<void>((resolve, reject) => {
+        const t = setTimeout(resolve, waitMs);
+        const onAbort = () => { clearTimeout(t); reject(new DOMException("Aborted", "AbortError")); };
+        controller.signal.addEventListener("abort", onAbort, { once: true });
+      });
+    }
+    if (!res || !res.ok) {
+      const detail = res ? (await res.text()).slice(0, 600) : "request failed";
+      const err: any = new Error(`${item.provider} ${res?.status || 0}: ${detail}`);
+      err.status = res?.status || 0;
       throw err;
     }
     const data = await res.json();
