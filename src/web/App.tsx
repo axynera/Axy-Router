@@ -203,7 +203,7 @@ export const App: React.FC = () => {
         {/* Footer — sits at viewport bottom, perfectly aligned with sidebar bottom */}
         <footer className="h-12 shrink-0 border-t border-zinc-200/80 dark:border-zinc-800/80 bg-[#fafafa] dark:bg-[#09090b] px-6 flex items-center text-xs text-zinc-500 dark:text-zinc-400 z-10">
           <div className="w-full flex flex-col sm:flex-row items-center justify-between gap-2">
-            <span>Neko-Router &copy; {new Date().getFullYear()} — Ultra-Low Latency AI Gateway</span>
+            <span>Meow-Router &copy; {new Date().getFullYear()} — Ultra-Low Latency AI Gateway</span>
             <span className="font-mono text-[11px]">Bun + ElysiaJS + SQLite WAL</span>
           </div>
         </footer>
