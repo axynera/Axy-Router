@@ -5,8 +5,9 @@
   "private": true,
   "scripts": {
     "dev": "bun scripts/dev.ts",
-    "build": "echo \"No build required (in-memory dynamic frontend)\"",
-    "start": "bun --watch src/index.ts"
+    "build": "bunx tsc --noEmit",
+    "start": "bun --watch src/index.ts",
+    "check": "bunx tsc --noEmit"
   },
   "devDependencies": {
     "@tailwindcss/cli": "^4.3.3",
@@ -18,7 +19,8 @@
     "@vitejs/plugin-react": "^6.1.0",
     "drizzle-kit": "^0.30.5",
     "tailwindcss": "^4.3.3",
-    "vite": "^8.2.2"
+    "vite": "^8.2.2",
+    "typescript": "^5.9.3"
   },
   "peerDependencies": {
     "typescript": "^5"
