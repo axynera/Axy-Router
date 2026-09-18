@@ -1,4 +1,4 @@
-# Neko-Router
+# Meow-Router
 
 High-performance, ultra-low overhead headless AI Gateway & Router designed for OpenAI and Anthropic compatible endpoints, built with **Bun**, **ElysiaJS**, native `bun:sqlite` with **Drizzle ORM** (WAL mode), with native **Elysia Eden** type-safe RPC client support.
 
@@ -13,7 +13,7 @@ High-performance, ultra-low overhead headless AI Gateway & Router designed for O
   - **RTK (Repeated Token Knowledge) Compression**: Prunes duplicate consecutive lines, redundant sentences, and repetitive chat history bloat before forwarding upstream.
   - **Caveman Mode**: Injects ultra-dense conciseness directives to strip conversational fluff, preambles, greetings, and apologies, slashing completion tokens.
   - **Whitespace & Prompt Minifier**: Normalizes excessive line breaks and trailing whitespace before tokenizer processing.
-- **Client Key Management & Token Quota Limiting**: Generate client access keys with standard `sk-neko-...` prefix, protected by both a requests-per-minute rate limiter and a total cumulative **Token Quota Limiter** (HTTP 429 `insufficient_quota` on exhaustion).
+- **Client Key Management & Token Quota Limiting**: Generate client access keys with standard `sk-meow-...` prefix, protected by both a requests-per-minute rate limiter and a total cumulative **Token Quota Limiter** (HTTP 429 `insufficient_quota` on exhaustion).
 - **Upstream Providers, Multi-Key Pools & Model Routing**: Configure OpenAI and Anthropic providers with multi-key pools for automatic key rotation and load balancing, custom base URLs (e.g. Ollama, vLLM, OpenRouter), priority weights, request timeouts, and live connection testing.
 - **Elysia Eden Ready**: Directly export `App` type (`export type App = typeof app`) for 100% end-to-end type-safe consumption in any frontend or service using `@elysiajs/eden`.
 - **6-Digit Master PIN Security**: Default PIN `123456` secures admin and configuration endpoints, secured with `Bun.password` (bcrypt) hashing and signed HTTP-only cookie sessions.
@@ -27,7 +27,7 @@ High-performance, ultra-low overhead headless AI Gateway & Router designed for O
 ## Project Structure
 
 ```text
-Neko-Router/
+Meow-Router/
 ├── src/                        # Headless Backend (Bun + ElysiaJS)
 │   ├── config/env.ts           # Environment configuration
 │   ├── db/
@@ -37,7 +37,7 @@ Neko-Router/
 │   │   └── auth.ts             # Cookie, Bearer JWT, and client key auth guard
 │   ├── routes/
 │   │   ├── auth.ts             # Status, login, change-pin, logout
-│   │   ├── keys.ts             # Client API keys CRUD (sk-neko-...)
+│   │   ├── keys.ts             # Client API keys CRUD (sk-meow-...)
 │   │   ├── api-keys.ts         # Router integration API keys
 │   │   ├── upstreams.ts        # Upstream keys CRUD, alias generator & test
 │   │   ├── telemetry.ts        # Aggregated stats & request logs
@@ -70,8 +70,8 @@ Neko-Router/
 
 ```bash
 # Clone the repository
-git clone https://github.com/your-username/Neko-Router.git
-cd Neko-Router
+git clone https://github.com/your-username/Meow-Router.git
+cd Meow-Router
 
 # Install backend dependencies
 bun install
@@ -108,7 +108,7 @@ The entire repository (including `node_modules` and `./data`) is bind-mounted di
 
 ## Frontend Integration with Elysia Eden
 
-Any frontend framework (React, Next.js, Vue, Svelte, Astro, etc.) or Node/Bun client can connect to Neko-Router with 100% end-to-end type safety using `@elysiajs/eden`:
+Any frontend framework (React, Next.js, Vue, Svelte, Astro, etc.) or Node/Bun client can connect to Meow-Router with 100% end-to-end type safety using `@elysiajs/eden`:
 
 ```bash
 bun add @elysiajs/eden
@@ -143,7 +143,7 @@ const { data: keys, error } = await client.api.keys.get({
 from openai import OpenAI
 
 client = OpenAI(
-    api_key="sk-neko-your-client-key",
+    api_key="sk-meow-your-client-key",
     base_url="http://localhost:3000/v1"
 )
 
@@ -163,14 +163,14 @@ for chunk in response:
 import Anthropic from "@anthropic-ai/sdk";
 
 const client = new Anthropic({
-  apiKey: "sk-neko-your-client-key",
+  apiKey: "sk-meow-your-client-key",
   baseURL: "http://localhost:3000",
 });
 
 const response = await client.messages.create({
   model: "claude-3-5-sonnet-20241022",
   max_tokens: 1024,
-  messages: [{ role: "user", content: "Hello Claude via Neko-Router!" }],
+  messages: [{ role: "user", content: "Hello Claude via Meow-Router!" }],
   stream: true,
 });
 
@@ -186,7 +186,7 @@ for await (const event of response) {
 ```bash
 curl -N http://localhost:3000/v1/chat/completions \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer sk-neko-your-client-key" \
+  -H "Authorization: Bearer sk-meow-your-client-key" \
   -d '{
     "model": "gpt-4o",
     "stream": true,
@@ -206,7 +206,7 @@ curl -N http://localhost:3000/v1/chat/completions \
 | `POST` | `/api/auth/login` | Login with 6-digit Master PIN | No |
 | `POST` | `/api/auth/change-pin` | Change 6-digit Master PIN | Session / Key |
 | `GET` | `/api/keys` | List client access keys & token quotas | Session / Key |
-| `POST` | `/api/keys` | Generate new client access key (`sk-neko-...`) | Session / Key |
+| `POST` | `/api/keys` | Generate new client access key (`sk-meow-...`) | Session / Key |
 | `GET` | `/api/upstreams` | List configured upstream provider keys | Session / Key |
 | `POST` | `/api/upstreams` | Add upstream key (OpenAI/Anthropic) | Session / Key |
 | `POST` | `/api/upstreams/:id/test` | Ping upstream key & measure latency | Session / Key |
@@ -218,6 +218,6 @@ curl -N http://localhost:3000/v1/chat/completions \
 | `GET` | `/api/admin/db/export` | Download SQLite backup file | Session / Key |
 | `POST` | `/api/admin/db/import` | Upload & verify SQLite database | Session / Key |
 | `GET` | `/api/admin/system` | Runtime diagnostics & memory usage | Session / Key |
-| `POST` | `/v1/chat/completions` | OpenAI Chat Completions proxy | Client Key (`sk-neko-...`) |
-| `GET` | `/v1/models` | List available models | Client Key (`sk-neko-...`) |
-| `POST` | `/v1/messages` | Anthropic Claude Messages proxy | Client Key (`sk-neko-...`) |
+| `POST` | `/v1/chat/completions` | OpenAI Chat Completions proxy | Client Key (`sk-meow-...`) |
+| `GET` | `/v1/models` | List available models | Client Key (`sk-meow-...`) |
+| `POST` | `/v1/messages` | Anthropic Claude Messages proxy | Client Key (`sk-meow-...`) |
