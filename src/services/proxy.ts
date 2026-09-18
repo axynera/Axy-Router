@@ -701,7 +701,11 @@ export async function proxyAnthropicMessages(
 ): Promise<Response> {
   const startTime = performance.now();
   const requestedModel = (body && typeof body === "object" ? body.model : "") || "unknown";
-  const selection = selectUpstreamKey("anthropic", requestedModel, clientKey);
+  const normalizedRequestedModel = String(requestedModel).trim().toLowerCase();
+  const isOmni = ["omni", "axynity-omni", "axynity_omni", "axynity/omni"].includes(normalizedRequestedModel);
+  const selection = isOmni
+    ? selectOmniUpstream("anthropic", clientKey)
+    : selectUpstreamKey("anthropic", requestedModel, clientKey);
   const upstream = selection.upstream;
 
   if (!upstream) {
@@ -711,12 +715,14 @@ export async function proxyAnthropicMessages(
       JSON.stringify({
         type: "error",
         error: {
-          type: isForbidden ? "permission_error" : isModelDisabled ? "invalid_request_error" : "router_error",
+          type: isForbidden ? "permission_error" : isModelDisabled || selection.error === "no_models" ? "invalid_request_error" : "router_error",
           message:
             selection.message ||
             (isModelDisabled
               ? `Model '${requestedModel}' is not enabled on any active Anthropic upstream provider. Enable it in Upstream Settings.`
-              : "No active Anthropic upstream key configured in Neko-Router"),
+              : selection.error === "no_models"
+                ? "Omni has no enabled chat models in the permitted Anthropic upstream pool."
+                : "No active Anthropic upstream key configured in Axy-Router"),
         },
       }),
       { status: isForbidden ? 403 : isModelDisabled ? 400 : 503, headers: { "Content-Type": "application/json" } }
@@ -767,7 +773,11 @@ export async function proxyAnthropicMessages(
     }
   }
 
-  const model = optimizedBody?.model || "unknown";
+  let model = optimizedBody?.model || "unknown";
+  if (isOmni && selection.model) {
+    optimizedBody.model = selection.model;
+    model = selection.model;
+  }
   const isStream = Boolean(optimizedBody?.stream);
 
   const reqId = "req_" + crypto.randomUUID().replace(/-/g, "");
