@@ -168,7 +168,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
             <Cat className="w-7 h-7 text-emerald-400" />
           </div>
           <h1 className="text-xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100">
-            Neko-Router Gateway
+            Meow-Router Gateway
           </h1>
           <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
             Enter your Master PIN to unlock the router control dashboard
