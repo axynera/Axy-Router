@@ -56,7 +56,7 @@ const htmlTemplate = `<!doctype html>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/public/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Neko-Router | High Performance AI Gateway</title>
+    <title>Meow-Router | High Performance AI Gateway</title>
     <link rel="stylesheet" href="/_web/main.css" />
   </head>
   <body>
