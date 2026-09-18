@@ -340,7 +340,7 @@ export async function proxyOpenAIChatCompletions(
         const clientAuth = reqHeaders.get("Authorization");
         const clientKeyHeader = reqHeaders.get("x-api-key");
         const passedKey = clientAuth?.startsWith("Bearer ") ? clientAuth.slice(7).trim() : clientKeyHeader?.trim();
-        if (passedKey && !passedKey.startsWith("sk-neko-") && passedKey !== "bb-default") {
+        if (passedKey && !passedKey.startsWith("sk-meow-") && passedKey !== "bb-default") {
           authHeaderVal = `Bearer ${passedKey}`;
         } else {
           authHeaderVal = "Bearer bb-default";
@@ -1240,10 +1240,10 @@ function enrichModel(prefix: string, m: any, defaultCreated?: number) {
     id: fullId,
     object: "model",
     created,
-    owned_by: "NekoRouter",
+    owned_by: "MeowRouter",
     name: m.name || cleanId,
-    description: m.description || `${cleanId} routed via Neko-Router${prefix ? ` (${prefix})` : ""}`,
-    provider: prefix || m.provider || "NekoRouter",
+    description: m.description || `${cleanId} routed via Meow-Router${prefix ? ` (${prefix})` : ""}`,
+    provider: prefix || m.provider || "MeowRouter",
     type,
     context_window: contextWindow,
     max_tokens: maxTokens,
@@ -1269,7 +1269,7 @@ function enrichModel(prefix: string, m: any, defaultCreated?: number) {
     parent: null,
   };
 
-  // Copy any extra metadata from original, preserving owned_by as NekoRouter
+  // Copy any extra metadata from original, preserving owned_by as MeowRouter
   for (const [key, val] of Object.entries(m)) {
     if (
       key !== "owned_by" &&
@@ -1347,7 +1347,7 @@ export async function proxyOpenAIModels(
     const targetUrl = targetBase.endsWith("/v1") ? `${targetBase}/models` : `${targetBase}/v1/models`;
 
     let authToSend: string;
-    if (passedKey && passedKey !== "bb-default" && !passedKey.startsWith("sk-neko-")) {
+    if (passedKey && passedKey !== "bb-default" && !passedKey.startsWith("sk-meow-")) {
       authToSend = `Bearer ${passedKey}`;
     } else if (followUpstream.apiKey) {
       authToSend = `Bearer ${followUpstream.apiKey}`;
@@ -1370,7 +1370,7 @@ export async function proxyOpenAIModels(
         if (Array.isArray(data?.data)) {
           data.data = data.data.map((m: any) => ({
             ...m,
-            owned_by: "NekoRouter",
+            owned_by: "MeowRouter",
           }));
         }
         return new Response(JSON.stringify(data), {
@@ -1388,7 +1388,7 @@ export async function proxyOpenAIModels(
     try {
       const { fetchBandelBangetLiveModels } = await import("./bandelbanget");
       const liveModels = await fetchBandelBangetLiveModels();
-      const data = liveModels.map((m) => enrichModel("", { ...m, owned_by: "NekoRouter" }));
+      const data = liveModels.map((m) => enrichModel("", { ...m, owned_by: "MeowRouter" }));
       return new Response(JSON.stringify({ object: "list", data }), {
         status: 200,
         headers: { "Content-Type": "application/json" },
@@ -1435,7 +1435,7 @@ export async function proxyOpenAIModels(
           const liveModels = await fetchBandelBangetLiveModels();
           for (const lm of liveModels) {
             if (!enabledModelMap.has(lm.id)) {
-              const enriched = enrichModel("", { ...lm, owned_by: "NekoRouter" });
+              const enriched = enrichModel("", { ...lm, owned_by: "MeowRouter" });
               enabledModelMap.set(lm.id, enriched);
             }
           }
@@ -1483,7 +1483,7 @@ export async function proxyOpenAIModels(
       const liveModels = await fetchBandelBangetLiveModels();
       for (const lm of liveModels) {
         if (!enabledModelMap.has(lm.id)) {
-          const enriched = enrichModel("", { ...lm, owned_by: "NekoRouter" });
+          const enriched = enrichModel("", { ...lm, owned_by: "MeowRouter" });
           enabledModelMap.set(lm.id, enriched);
         }
       }
