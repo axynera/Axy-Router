@@ -394,7 +394,9 @@ export function getBaseUrl(upstream: UpstreamKey): string {
   }
 
   return "https://api.anthropic.com";
-}mport { db } from "../db";
+}
+
+import { db } from "../db";
 import { upstreamKeys, settings, type UpstreamKey } from "../db/schema";
 import { eq, and } from "drizzle-orm";
 
