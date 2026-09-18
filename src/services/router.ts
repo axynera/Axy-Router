@@ -175,7 +175,7 @@ export function selectUpstreamKey(
     return {
       upstream: null,
       error: "no_upstreams",
-      message: `No active ${provider.toUpperCase()} upstream providers configured in Neko-Router.`,
+      message: `No active ${provider.toUpperCase()} upstream providers configured in Meow-Router.`,
     };
   }
 
@@ -188,7 +188,7 @@ export function selectUpstreamKey(
       return {
         upstream: null,
         error: "no_allowed_providers",
-        message: `Client Key "${clientKey.name}" has no permitted upstream providers (Default: OFF all providers). Please enable providers for this key in the Neko-Router dashboard.`,
+        message: `Client Key "${clientKey.name}" has no permitted upstream providers (Default: OFF all providers). Please enable providers for this key in the Meow-Router dashboard.`,
       };
     }
 
@@ -521,7 +521,7 @@ export function selectUpstreamKey(
     return {
       upstream: null,
       error: "no_upstreams",
-      message: `No active ${provider.toUpperCase()} upstream providers configured in Neko-Router.`,
+      message: `No active ${provider.toUpperCase()} upstream providers configured in Meow-Router.`,
     };
   }
 
@@ -534,7 +534,7 @@ export function selectUpstreamKey(
       return {
         upstream: null,
         error: "no_allowed_providers",
-        message: `Client Key "${clientKey.name}" has no permitted upstream providers (Default: OFF all providers). Please enable providers for this key in the Neko-Router dashboard.`,
+        message: `Client Key "${clientKey.name}" has no permitted upstream providers (Default: OFF all providers). Please enable providers for this key in the Meow-Router dashboard.`,
       };
     }
 
