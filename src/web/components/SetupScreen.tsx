@@ -57,7 +57,7 @@ export const SetupScreen: React.FC<SetupScreenProps> = ({ onSetupSuccess }) => {
             First Setup Required
           </h1>
           <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
-            Your Neko-Router is currently using the factory default PIN (<code className="font-mono text-zinc-900 dark:text-zinc-200 bg-zinc-100 dark:bg-zinc-800 px-1 py-0.5 rounded">123456</code>).
+            Your Meow-Router is currently using the factory default PIN (<code className="font-mono text-zinc-900 dark:text-zinc-200 bg-zinc-100 dark:bg-zinc-800 px-1 py-0.5 rounded">123456</code>).
             For security, please set a new personalized 6-digit master PIN.
           </p>
         </div>
