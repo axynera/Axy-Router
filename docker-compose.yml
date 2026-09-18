@@ -1,7 +1,7 @@
 services:
-  neko-router:
+  meow-router:
     build: .
-    container_name: neko-router
+    container_name: meow-router
     restart: unless-stopped
     network_mode: "host"
     env_file:
