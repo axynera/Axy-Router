@@ -74,13 +74,13 @@ const AVAILABLE_ENDPOINTS = [
   {
     method: "GET",
     path: "/v1/models",
-    auth: "Public / Optional Client Key",
+    auth: "Bearer <api_key> or x-api-key: <api_key>",
     description: "List all active AI models across connected upstream providers in OpenAI format.",
   },
   {
     method: "GET",
     path: "/models",
-    auth: "Public / Optional Client Key",
+    auth: "Bearer <api_key> or x-api-key: <api_key>",
     description: "Standard OpenAI alias for /v1/models.",
   },
   {
@@ -111,7 +111,7 @@ function getV1Directory() {
 
   return {
     status: "online",
-    gateway: "Neko-Router",
+    gateway: "Axy-Router",
     version: "1.0.0",
     motivation: randomMotivation,
     server: {
@@ -166,7 +166,7 @@ export const proxyRoutes = new Elysia()
       ? authHeader.slice(7).trim()
       : xApiKey?.trim();
 
-    const effectiveKey = key || "bb-default";
+    const effectiveKey = key || "axy-default";
     const clientKey = await validateClientKey(effectiveKey);
     if (!clientKey) {
       if (!key) {
@@ -174,7 +174,7 @@ export const proxyRoutes = new Elysia()
         return {
           error: {
             message:
-              "Missing API key. Pass your Neko-Router key via 'Authorization: Bearer <key>' or 'x-api-key: <key>'.",
+              "Missing API key. Pass your Axy-Router key via 'Authorization: Bearer <key>' or 'x-api-key: <key>'.",
             type: "invalid_request_error",
             code: "invalid_api_key",
           },
@@ -183,7 +183,7 @@ export const proxyRoutes = new Elysia()
       set.status = 401;
       return {
         error: {
-          message: "Invalid or inactive Neko-Router API key.",
+          message: "Invalid or inactive Axy-Router API key.",
           type: "invalid_request_error",
           code: "invalid_api_key",
         },
@@ -214,24 +214,31 @@ export const proxyRoutes = new Elysia()
       ? authHeader.slice(7).trim()
       : xApiKey?.trim();
 
-    if (key) {
-      const clientKey = await validateClientKey(key);
-      if (!clientKey) {
-        set.status = 401;
-        return {
-          error: {
-            message: "Invalid API key provided",
-            type: "invalid_request_error",
-            param: null,
-            code: "invalid_api_key",
-          },
-        };
-      }
-      return proxyOpenAIModels(clientKey, request.headers);
+    if (!key) {
+      set.status = 401;
+      return {
+        error: {
+          message: "Missing API key. Pass your Axy-Router key via 'Authorization: Bearer <key>' or 'x-api-key: <key>'.",
+          type: "invalid_request_error",
+          param: null,
+          code: "invalid_api_key",
+        },
+      };
     }
 
-    // Tanpa key: tampilkan semua model aktif dari seluruh provider
-    return proxyOpenAIModels(null, request.headers);
+    const clientKey = await validateClientKey(key);
+    if (!clientKey) {
+      set.status = 401;
+      return {
+        error: {
+          message: "Invalid or inactive Axy-Router API key.",
+          type: "invalid_request_error",
+          param: null,
+          code: "invalid_api_key",
+        },
+      };
+    }
+    return proxyOpenAIModels(clientKey, request.headers);
   })
   .get("/models", async ({ request, set }) => {
     const authHeader = request.headers.get("Authorization");
@@ -240,23 +247,31 @@ export const proxyRoutes = new Elysia()
       ? authHeader.slice(7).trim()
       : xApiKey?.trim();
 
-    if (key) {
-      const clientKey = await validateClientKey(key);
-      if (!clientKey) {
-        set.status = 401;
-        return {
-          error: {
-            message: "Invalid API key provided",
-            type: "invalid_request_error",
-            param: null,
-            code: "invalid_api_key",
-          },
-        };
-      }
-      return proxyOpenAIModels(clientKey, request.headers);
+    if (!key) {
+      set.status = 401;
+      return {
+        error: {
+          message: "Missing API key. Pass your Axy-Router key via 'Authorization: Bearer <key>' or 'x-api-key: <key>'.",
+          type: "invalid_request_error",
+          param: null,
+          code: "invalid_api_key",
+        },
+      };
     }
 
-    return proxyOpenAIModels(null, request.headers);
+    const clientKey = await validateClientKey(key);
+    if (!clientKey) {
+      set.status = 401;
+      return {
+        error: {
+          message: "Invalid or inactive Axy-Router API key.",
+          type: "invalid_request_error",
+          param: null,
+          code: "invalid_api_key",
+        },
+      };
+    }
+    return proxyOpenAIModels(clientKey, request.headers);
   })
 
   // Anthropic Messages
@@ -265,7 +280,7 @@ export const proxyRoutes = new Elysia()
     const xApiKey = request.headers.get("x-api-key");
     const key = xApiKey?.trim() || (authHeader?.startsWith("Bearer ") ? authHeader.slice(7).trim() : null);
 
-    const effectiveKey = key || "bb-default";
+    const effectiveKey = key || "axy-default";
     const clientKey = await validateClientKey(effectiveKey);
     if (!clientKey) {
       if (!key) {
@@ -275,7 +290,7 @@ export const proxyRoutes = new Elysia()
           error: {
             type: "authentication_error",
             message:
-              "Missing API key. Pass your Neko-Router key via 'x-api-key: <key>' or 'Authorization: Bearer <key>'.",
+              "Missing API key. Pass your Axy-Router key via 'x-api-key: <key>' or 'Authorization: Bearer <key>'.",
           },
         };
       }
@@ -284,7 +299,7 @@ export const proxyRoutes = new Elysia()
         type: "error",
         error: {
           type: "authentication_error",
-          message: "Invalid or inactive Neko-Router API key.",
+          message: "Invalid or inactive Axy-Router API key.",
         },
       };
     }
