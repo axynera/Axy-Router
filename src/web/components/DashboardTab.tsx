@@ -139,7 +139,7 @@ export const DashboardTab: React.FC = () => {
   // Base URL copy states
   const [copiedType, setCopiedType] = useState<"v1" | "root" | null>(null);
 
-  // 9Router View Tabs & Filters
+  // MeowRouter View Tabs & Filters
   const [activeSubtab, setActiveSubtabState] = useState<"overview" | "details">(() => {
     if (typeof window !== "undefined") {
       const saved = localStorage.getItem("neko_dashboard_subtab");
@@ -417,7 +417,7 @@ export const DashboardTab: React.FC = () => {
   }, [upstreams]);
 
   // Dynamic layout coordinates for provider nodes relative to center (0, 0)
-  // Matching 9Router graph appearance:
+  // Matching MeowRouter graph appearance:
   const providerPositions = useMemo(() => {
     if (activeUpstreams.length === 0) {
       return [];
@@ -524,7 +524,7 @@ export const DashboardTab: React.FC = () => {
         </div>
       </div>
 
-      {/* 2. Top Header & Metrics Banner (9Router Style) */}
+      {/* 2. Top Header & Metrics Banner (MeowRouter Style) */}
       <div className="space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
@@ -540,7 +540,7 @@ export const DashboardTab: React.FC = () => {
           </div>
 
           <div className="flex items-center space-x-2 self-start sm:self-auto">
-            {/* Time Filter Pills matching 9Router (Today, 24h, 7D, 30D, All) */}
+            {/* Time Filter Pills matching MeowRouter (Today, 24h, 7D, 30D, All) */}
             <div className="flex items-center p-0.5 rounded-md skeuo-inset text-xs">
               {(["Today", "24h", "7D", "30D", "All"] as const).map((t) => (
                 <button
@@ -567,7 +567,7 @@ export const DashboardTab: React.FC = () => {
           </div>
         </div>
 
-        {/* 5 Metrics Cards Grid (Exact 9Router Style) */}
+        {/* 5 Metrics Cards Grid (Exact MeowRouter Style) */}
         <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
           {/* TOTAL REQUESTS */}
           <div className="skeuo-card p-3.5">
@@ -644,7 +644,7 @@ export const DashboardTab: React.FC = () => {
         </div>
       </div>
 
-      {/* 3. Main Router Visualization Canvas (9Router Topology & Recent Requests) */}
+      {/* 3. Main Router Visualization Canvas (MeowRouter Topology & Recent Requests) */}
       <div className="rounded-xl border border-zinc-300/80 dark:border-zinc-800 bg-[#0c0d10] shadow-[0_4px_20px_rgba(0,0,0,0.5)] overflow-hidden relative">
         {/* Top Bar inside Visualization Box */}
         <div className="p-3.5 px-4 flex items-center justify-between border-b border-zinc-800/80 bg-[#111217]">
@@ -705,7 +705,7 @@ export const DashboardTab: React.FC = () => {
               touchAction: "none",
             }}
           >
-            {/* Zoom Controls (Floating on bottom left, identical to 9Router screenshot) */}
+            {/* Zoom Controls (Floating on bottom left, identical to MeowRouter screenshot) */}
             <div
               className="absolute bottom-3 left-3 sm:bottom-4 sm:left-4 z-20 flex flex-col space-y-1 bg-[#16171e]/90 backdrop-blur-md border border-zinc-800 rounded-md p-1 shadow-lg pointer-events-auto"
               onMouseDown={(e) => e.stopPropagation()}
@@ -784,7 +784,7 @@ export const DashboardTab: React.FC = () => {
                 </svg>
               )}
 
-              {/* Center Core Node: NekoRouter (Placed dead center at 0,0) */}
+              {/* Center Core Node: MeowRouter (Placed dead center at 0,0) */}
               <div
                 className="absolute z-10 -translate-x-1/2 -translate-y-1/2"
                 style={{ left: "0px", top: "0px" }}
@@ -800,7 +800,7 @@ export const DashboardTab: React.FC = () => {
                   </div>
                   <div className="flex items-center space-x-1.5">
                     <span className="font-semibold text-xs text-white tracking-wide">
-                      NekoRouter
+                      MeowRouter
                     </span>
                     <span
                       className={`w-2 h-2 rounded-full inline-block transition-colors ${activeUpstreamIds.length > 0 ? "bg-emerald-400 animate-pulse" : "bg-zinc-600"
@@ -858,7 +858,7 @@ export const DashboardTab: React.FC = () => {
           </div>
 
 
-          {/* Right: RECENT REQUESTS Panel (Exact 9Router Style) */}
+          {/* Right: RECENT REQUESTS Panel (Exact MeowRouter Style) */}
           <div className="lg:col-span-4 border-t lg:border-t-0 lg:border-l border-zinc-800/80 bg-[#0f1015] p-4 flex flex-col">
             <div className="flex items-center justify-between mb-3">
               <span className="text-[11px] font-bold tracking-wider text-zinc-400 uppercase">
