@@ -7,13 +7,13 @@ import { eq, desc, sql } from "drizzle-orm";
 function generateApiKeyString(custom?: string): string {
   if (custom && custom.trim().length > 0) {
     const trimmed = custom.trim();
-    return trimmed.startsWith("nr-api-") ? trimmed : `nr-api-${trimmed}`;
+    return trimmed.startsWith("axy-") ? trimmed : `axy-${trimmed}`;
   }
   const random = Array.from(crypto.getRandomValues(new Uint8Array(20)))
     .map((b) => b.toString(36))
     .join("")
     .slice(0, 24);
-  return `nr-api-${random}`;
+  return `axy-${random}`;
 }
 
 export const routerApiKeysRoutes = new Elysia({ prefix: "/api/router-keys" })
