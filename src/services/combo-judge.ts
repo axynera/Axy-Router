@@ -18,7 +18,8 @@ type CandidateResult = {
 const MAX_CONTINUES = 8;
 const MAX_TOTAL_OUTPUT = 100000;
 const CANDIDATE_TIMEOUT_MS = 45000;
-const MAX_CONTINUE_CONTEXT = 12000;
+const MAX_CONTINUE_CONTEXT = 16000;
+const MAX_JUDGE_CONTEXT_PER_CANDIDATE = 18000;
 const MAX_JUDGE_OUTPUT = 16384;
 
 function allowed(clientKey: ClientKey | null, upstream: UpstreamKey) {
@@ -51,7 +52,7 @@ function isTruncated(provider: "openai" | "anthropic", data: any, answer: string
     ? String(data?.stop_reason || "").toLowerCase()
     : String(data?.choices?.[0]?.finish_reason || "").toLowerCase();
   return reason === "length" || reason === "max_tokens" || reason === "max_output_tokens" ||
-    answer.endsWith("…") || answer.endsWith("...");
+    false;
 }
 
 function toAnthropicContent(content: any): any {
@@ -85,10 +86,7 @@ function toAnthropicBody(body: any, model: string, continuation?: { answer: stri
     out.push({ role: m?.role === "assistant" ? "assistant" : "user", content: toAnthropicContent(m?.content) });
   }
   if (continuation) {
-    const context = continuation.answer.length > MAX_CONTINUE_CONTEXT
-      ? continuation.answer.slice(-MAX_CONTINUE_CONTEXT)
-      : continuation.answer;
-    out.push({ role: "assistant", content: context });
+    out.push({ role: "assistant", content: continuationContext(continuation.answer) });
     out.push({ role: "user", content: continuation.instruction });
   }
   const payload: any = {
@@ -105,13 +103,16 @@ function toAnthropicBody(body: any, model: string, continuation?: { answer: stri
   return payload;
 }
 
+function continuationContext(answer: string) {
+  if (answer.length <= MAX_CONTINUE_CONTEXT) return answer;
+  const half = Math.floor(MAX_CONTINUE_CONTEXT / 2);
+  return answer.slice(0, half) + "\n\n[...middle omitted for context...]\n\n" + answer.slice(-half);
+}
+
 function toOpenAIBody(body: any, model: string, continuation?: { answer: string; instruction: string }) {
   const messages = Array.isArray(body?.messages) ? [...body.messages] : [];
   if (continuation) {
-    const context = continuation.answer.length > MAX_CONTINUE_CONTEXT
-      ? continuation.answer.slice(-MAX_CONTINUE_CONTEXT)
-      : continuation.answer;
-    messages.push({ role: "assistant", content: context });
+    messages.push({ role: "assistant", content: continuationContext(continuation.answer) });
     messages.push({ role: "user", content: continuation.instruction });
   }
   return { ...body, model, messages, stream: false };
@@ -202,7 +203,7 @@ async function continueCandidate(
     }
     if (result.answer) answer += result.answer;
   }
-  return { answer: answer.slice(0, MAX_TOTAL_OUTPUT), turns };
+  if (result.truncated && turns >= MAX_CONTINUES) throw new ComboContinuationError("maximum continuation limit reached", answer, turns);\n  if (result.truncated && answer.length >= MAX_TOTAL_OUTPUT) throw new ComboContinuationError("maximum output limit reached", answer, turns);\n  return { answer: answer.slice(0, MAX_TOTAL_OUTPUT), turns };
 }
 
 async function callCandidate(
@@ -231,7 +232,7 @@ async function judgeAnswers(config: any, answers: Candidate[], originalBody: any
     "USER REQUEST:",
     JSON.stringify(originalBody?.messages || []),
     "",
-    ...answers.map((a, i) => `CANDIDATE ${i + 1} [${a.provider}/${a.model}]:\n${a.answer}`),
+    ...answers.map((a, i) => { const candidateText = a.answer.length > MAX_JUDGE_CONTEXT_PER_CANDIDATE ? a.answer.slice(0, MAX_JUDGE_CONTEXT_PER_CANDIDATE / 2) + "\n\n[...middle omitted...]\n\n" + a.answer.slice(-MAX_JUDGE_CONTEXT_PER_CANDIDATE / 2) : a.answer; return `CANDIDATE ${i + 1} [${a.provider}/${a.model}]:\n${candidateText}`; }),
   ].join("\n");
 
   const synthetic = {
