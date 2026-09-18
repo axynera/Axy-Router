@@ -1,5 +1,6 @@
 import {
   selectUpstreamKey,
+  selectOmniUpstream,
   getBaseUrl,
   getApiKeyForUpstream,
   getActiveUpstreamKeys,
@@ -47,7 +48,11 @@ export async function proxyOpenAIChatCompletions(
 ): Promise<Response> {
   const startTime = performance.now();
   const requestedModel = (body && typeof body === "object" ? body.model : "") || "unknown";
-  const selection = selectUpstreamKey("openai", requestedModel, clientKey);
+  const normalizedRequestedModel = String(requestedModel).trim().toLowerCase();
+  const isOmni = ["omni", "axynity-omni", "axynity_omni", "axynity/omni"].includes(normalizedRequestedModel);
+  const selection = isOmni
+    ? selectOmniUpstream("openai", clientKey)
+    : selectUpstreamKey("openai", requestedModel, clientKey);
   const upstream = selection.upstream;
 
   if (!upstream) {
@@ -60,9 +65,11 @@ export async function proxyOpenAIChatCompletions(
             selection.message ||
             (isModelDisabled
               ? `Model '${requestedModel}' is not enabled on any active OpenAI upstream provider. Enable it in Upstream Settings.`
-              : "No active OpenAI upstream provider configured in Neko-Router"),
-          type: isForbidden ? "permission_error" : isModelDisabled ? "invalid_request_error" : "router_error",
-          code: isForbidden ? "provider_access_denied" : isModelDisabled ? "model_not_enabled" : "no_upstream_key",
+              : selection.error === "no_models"
+                ? "Omni has no enabled chat models in the permitted upstream pool."
+                : "No active OpenAI upstream provider configured in Axy-Router"),
+          type: isForbidden ? "permission_error" : isModelDisabled || selection.error === "no_models" ? "invalid_request_error" : "router_error",
+          code: isForbidden ? "provider_access_denied" : isModelDisabled ? "model_not_enabled" : selection.error === "no_models" ? "omni_no_models" : "no_upstream_key",
         },
       }),
       { status: isForbidden ? 403 : isModelDisabled ? 400 : 503, headers: { "Content-Type": "application/json" } }
@@ -121,7 +128,11 @@ export async function proxyOpenAIChatCompletions(
     }
   }
 
-  const model = optimizedBody?.model || "unknown";
+  let model = optimizedBody?.model || "unknown";
+  if (isOmni && selection.model) {
+    optimizedBody.model = selection.model;
+    model = selection.model;
+  }
   const isStream = Boolean(optimizedBody?.stream);
 
   const reqId = "req_" + crypto.randomUUID().replace(/-/g, "");
@@ -1262,6 +1273,31 @@ function enrichModel(prefix: string, m: any, defaultCreated?: number) {
   return modelObj;
 }
 
+function addOmniVirtualModel(enabledModelMap: Map<string, any>) {
+  if (enabledModelMap.has("axynity-omni")) return;
+  enabledModelMap.set("axynity-omni", {
+    id: "axynity-omni",
+    object: "model",
+    created: Math.floor(Date.now() / 1000),
+    owned_by: "AxyRouter",
+    name: "Axynity Omni",
+    description: "One virtual model pool combining all enabled chat models across permitted Axy-Router upstreams with automatic round-robin routing.",
+    provider: "AxyRouter",
+    type: "chat",
+    context_window: 128000,
+    max_tokens: 8192,
+    max_output_tokens: 8192,
+    capabilities: {
+      completion: true, chat_completion: true, embeddings: false, vision: true,
+      function_calling: true, tools: true, tool_choice: true, json_mode: true,
+      json_schema: true, streaming: true, reasoning: true,
+    },
+    permission: [],
+    root: "axynity-omni",
+    parent: null,
+  });
+}
+
 export async function proxyOpenAIModels(
   clientKey: ClientKey | null,
   headers?: Headers
@@ -1406,6 +1442,7 @@ export async function proxyOpenAIModels(
       }
     }
 
+    addOmniVirtualModel(enabledModelMap);
     const data = Array.from(enabledModelMap.values());
     return new Response(JSON.stringify({ object: "list", data }), {
       status: 200,
@@ -1441,6 +1478,7 @@ export async function proxyOpenAIModels(
     } catch (e) {}
   }
 
+  addOmniVirtualModel(enabledModelMap);
   const data = Array.from(enabledModelMap.values());
   return new Response(JSON.stringify({ object: "list", data }), {
     status: 200,
