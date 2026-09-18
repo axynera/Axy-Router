@@ -85,8 +85,10 @@ function toAnthropicBody(body: any, model: string, continuation?: { answer: stri
     out.push({ role: m?.role === "assistant" ? "assistant" : "user", content: toAnthropicContent(m?.content) });
   }
   if (continuation) {
-    out.push({ role: "assistant", content: continuationContext(continuation.answer) });
-    out.push({ role: "user", content: continuation.instruction });
+    out.push({
+      role: "user",
+      content: `Previous partial answer (continue from this; do not repeat it):\n\n${continuationContext(continuation.answer)}\n\n${continuation.instruction}`
+    });
   }
   const payload: any = {
     model,
@@ -95,8 +97,7 @@ function toAnthropicBody(body: any, model: string, continuation?: { answer: stri
     messages: out.length ? out : [{ role: "user", content: "Please answer the request." }],
     stream: false
   };
-  if (typeof body?.temperature === "number") payload.temperature = body.temperature;
-  if (typeof body?.top_p === "number") payload.top_p = body.top_p;
+  // Avoid forwarding OpenAI sampling parameters that newer Claude models may reject.
   if (body?.stop_sequences) payload.stop_sequences = body.stop_sequences;
   if (body?.metadata) payload.metadata = body.metadata;
   return payload;
@@ -144,10 +145,16 @@ async function callCandidateOnce(
     } else {
       headers.Authorization = `Bearer ${key}`;
     }
-    const res = await fetch(
-      isAnthropic ? `${getBaseUrl(item.upstream)}/v1/messages` : `${getBaseUrl(item.upstream)}/chat/completions`,
-      { method: "POST", headers, body: JSON.stringify(payload), signal: controller.signal }
-    );
+    const baseUrl = getBaseUrl(item.upstream);
+    const endpoint = isAnthropic
+      ? `${baseUrl}${baseUrl.endsWith("/v1") ? "" : "/v1"}/messages`
+      : `${baseUrl}/chat/completions`;
+    const res = await fetch(endpoint, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(payload),
+      signal: controller.signal
+    });
     if (!res.ok) {
       const detail = (await res.text()).slice(0, 600);
       const err: any = new Error(`${item.provider} ${res.status}: ${detail}`);
