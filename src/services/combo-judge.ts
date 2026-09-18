@@ -459,15 +459,15 @@ export async function handleCombo(
         : [{ type: "text", text: finalAnswer }],
       stop_reason: selectedToolCalls?.length ? "tool_use" : "end_turn",
       stop_sequence: null,
-      usage: { input_tokens: 0, output_tokens: 0 }
+      usage: { input_tokens: inputTokens, output_tokens: outputTokens }
     };
     if (body?.stream) {
       const chunks = [
-        `event: message_start\ndata: ${JSON.stringify({ type:"message_start", message:{ ...response, usage:{input_tokens:0,output_tokens:0} } })}\n\n`,
+        `event: message_start\ndata: ${JSON.stringify({ type:"message_start", message:{ ...response, usage:{input_tokens:inputTokens,output_tokens:outputTokens} } })}\n\n`,
         `event: content_block_start\ndata: ${JSON.stringify({type:"content_block_start",index:0,content_block:{type:"text",text:""}})}\n\n`,
         `event: content_block_delta\ndata: ${JSON.stringify({type:"content_block_delta",index:0,delta:{type:"text_delta",text:finalAnswer}})}\n\n`,
         `event: content_block_stop\ndata: ${JSON.stringify({type:"content_block_stop",index:0})}\n\n`,
-        `event: message_delta\ndata: ${JSON.stringify({type:"message_delta",delta:{stop_reason:"end_turn",stop_sequence:null},usage:{output_tokens:0}})}\n\n`,
+        `event: message_delta\ndata: ${JSON.stringify({type:"message_delta",delta:{stop_reason:selectedToolCalls?.length ? "tool_use" : "end_turn",stop_sequence:null},usage:{output_tokens:outputTokens}})}\n\n`,
         `event: message_stop\ndata: ${JSON.stringify({type:"message_stop"})}\n\n`
       ];
       return new Response(chunks.join(""), { status:200, headers:{"Content-Type":"text/event-stream","Cache-Control":"no-cache","Connection":"keep-alive"} });
