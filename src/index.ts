@@ -11,6 +11,7 @@ import { adminRoutes } from "./routes/admin";
 import { proxyRoutes } from "./routes/proxy";
 import { apiProvidersRoutes } from "./routes/api-providers";
 import { domainRoutes } from "./routes/domain";
+import { comboRoutes } from "./routes/combo";
 import { existsSync, watch } from "fs";
 import { join } from "path";
 import { webHandler, htmlTemplate, bundleFrontend } from "./web/handler";
@@ -81,6 +82,7 @@ const app = new Elysia()
   .use(telemetryRoutes)
   .use(adminRoutes)
   .use(domainRoutes)
+  .use(comboRoutes)
   .use(proxyRoutes)
   // Dynamic Web Frontend Handler
   .use(webHandler)
