@@ -7,6 +7,8 @@ import {
   parseUpstreamModels,
   parseUpstreamKeyEntries,
   parseAllowedProviders,
+  isComboModel,
+  getComboConfig,
 } from "./router";
 import { recordTelemetry, registerActiveRequest } from "./telemetry";
 import { incrementClientKeyTokens, checkClientRateLimit, validateClientKey } from "./auth";
@@ -49,7 +51,7 @@ export async function proxyOpenAIChatCompletions(
   const startTime = performance.now();
   const requestedModel = (body && typeof body === "object" ? body.model : "") || "unknown";
   const normalizedRequestedModel = String(requestedModel).trim().toLowerCase();
-  const isOmni = ["omni", "axynity-omni", "axynity_omni", "axynity/omni"].includes(normalizedRequestedModel);
+  const isOmni = isComboModel(normalizedRequestedModel);
   const selection = isOmni
     ? selectOmniUpstream("openai", clientKey)
     : selectUpstreamKey("openai", requestedModel, clientKey);
@@ -702,7 +704,7 @@ export async function proxyAnthropicMessages(
   const startTime = performance.now();
   const requestedModel = (body && typeof body === "object" ? body.model : "") || "unknown";
   const normalizedRequestedModel = String(requestedModel).trim().toLowerCase();
-  const isOmni = ["omni", "axynity-omni", "axynity_omni", "axynity/omni"].includes(normalizedRequestedModel);
+  const isOmni = isComboModel(normalizedRequestedModel);
   const selection = isOmni
     ? selectOmniUpstream("anthropic", clientKey)
     : selectUpstreamKey("anthropic", requestedModel, clientKey);
