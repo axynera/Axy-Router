@@ -39,7 +39,7 @@ export const Topbar: React.FC<TopbarProps> = ({
 }) => {
   const current = titles[activeTab] || {
     title: "Gateway Dashboard",
-    subtitle: "Neko-Router Control Panel",
+    subtitle: "Meow-Router Control Panel",
   };
 
   return (
