@@ -122,6 +122,51 @@ function anthropicToolsToOpenAI(tools: any) {
     : t).filter(Boolean);
 }
 
+
+
+function isPlainJsonObject(value: any): value is Record<string, any> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function mergeJsonObjects(base: any, extra: any): any {
+  if (!isPlainJsonObject(base) || !isPlainJsonObject(extra)) return base;
+  const out: Record<string, any> = { ...base };
+  for (const [key, value] of Object.entries(extra)) {
+    if (isPlainJsonObject(out[key]) && isPlainJsonObject(value)) {
+      out[key] = mergeJsonObjects(out[key], value);
+    } else {
+      out[key] = value;
+    }
+  }
+  return out;
+}
+
+/**
+ * Universal Meow-Router custom JSON.
+ *
+ * Clients may send either:
+ *   "custom_json": { ... }
+ * or:
+ *   "extra_body": { ... }
+ *
+ * The object is deep-merged into the provider payload after protocol
+ * translation, so provider-specific parameters survive OpenAI <-> Anthropic
+ * conversion. Control fields are never forwarded as custom JSON themselves.
+ */
+function applyCustomJson(payload: any, body: any): any {
+  const custom = isPlainJsonObject(body?.custom_json)
+    ? body.custom_json
+    : isPlainJsonObject(body?.extra_body)
+      ? body.extra_body
+      : null;
+
+  if (!custom) return payload;
+  const cleanCustom = { ...custom };
+  delete cleanCustom.custom_json;
+  delete cleanCustom.extra_body;
+  return mergeJsonObjects(payload, cleanCustom);
+}
+
 function toAnthropicBody(body: any, model: string, continuation?: { answer: string; instruction: string }) {
   const messages = Array.isArray(body?.messages) ? body.messages : [];
   const systemParts: string[] = [];
@@ -173,7 +218,7 @@ function toAnthropicBody(body: any, model: string, continuation?: { answer: stri
   // Avoid forwarding OpenAI sampling parameters that newer Claude models may reject.
   if (body?.stop_sequences) payload.stop_sequences = body.stop_sequences;
   if (body?.metadata) payload.metadata = body.metadata;
-  return payload;
+  return applyCustomJson(payload, body);
 }
 
 function continuationContext(answer: string) {
@@ -222,7 +267,7 @@ function toOpenAIBody(body: any, model: string, continuation?: { answer: string;
   const payload: any = { ...body, model, messages: normalizedMessages, stream: false };
   if (body?.max_completion_tokens && !body?.max_tokens) payload.max_tokens = body.max_completion_tokens;
   if (payload.tools) payload.tools = payload.tools.map((t: any) => t?.name ? { type: "function", function: { name: t.name, description: t.description, parameters: t.input_schema } } : t);
-  return payload;
+  return applyCustomJson(payload, body);
 }
 
 async function callCandidateOnce(
