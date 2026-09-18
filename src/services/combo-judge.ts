@@ -203,7 +203,11 @@ async function continueCandidate(
     }
     if (result.answer) answer += result.answer;
   }
-  if (result.truncated && turns >= MAX_CONTINUES) throw new ComboContinuationError("maximum continuation limit reached", answer, turns);\n  if (result.truncated && answer.length >= MAX_TOTAL_OUTPUT) throw new ComboContinuationError("maximum output limit reached", answer, turns);\n  return { answer: answer.slice(0, MAX_TOTAL_OUTPUT), turns };
+  if (result.truncated && turns >= MAX_CONTINUES) throw new ComboContinuationError("maximum continuation limit reached", answer, turns);
+  if (result.truncated && answer.length >= MAX_TOTAL_OUTPUT) {
+    throw new ComboContinuationError("maximum output limit reached", answer, turns);
+  }
+  return { answer: answer.slice(0, MAX_TOTAL_OUTPUT), turns };
 }
 
 async function callCandidate(
