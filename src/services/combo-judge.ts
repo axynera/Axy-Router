@@ -330,6 +330,9 @@ async function continueCandidate(
       throw new ComboContinuationError(String((error as Error)?.message || error), answer, turns - 1);
     }
     if (result.toolCalls?.length) return { answer, turns };
+    if (result.rawContent?.some((x: any) => x?.type === "thinking" || x?.type === "redacted_thinking")) {
+      throw new ComboContinuationError("thinking response cannot be safely reconstructed for continuation", answer, turns);
+    }
     if (result.answer) answer += result.answer;
   }
   if (result.truncated && turns >= MAX_CONTINUES) throw new ComboContinuationError("maximum continuation limit reached", answer, turns);
@@ -348,6 +351,10 @@ async function callCandidate(
 ): Promise<{ answer: string; turns: number }> {
   if (initialAnswer) return continueCandidate(item, body, signal, initialAnswer, initialTurns);
   const result = await callCandidateOnce(item, body, signal);
+  if (result.toolCalls?.length) return { answer: result.answer, turns: 0 };
+  if (result.truncated && result.rawContent?.some((x: any) => x?.type === "thinking" || x?.type === "redacted_thinking")) {
+    throw new ComboContinuationError("thinking response cannot be safely reconstructed for continuation", result.answer, 0);
+  }
   return continueCandidate(item, body, signal, result.answer, 0);
 }
 
