@@ -732,14 +732,3 @@ export function selectOmniUpstream(
   return { upstream: selected.upstream, model: selected.model };
 }
 
-export function getBaseUrl(upstream: UpstreamKey): string {
-  if (upstream.baseUrl && upstream.baseUrl.trim().length > 0) {
-    return upstream.baseUrl.replace(/\/+$/, "");
-  }
-
-  if (upstream.provider === "openai") {
-    return "https://api.openai.com/v1";
-  }
-
-  return "https://api.anthropic.com";
-}
