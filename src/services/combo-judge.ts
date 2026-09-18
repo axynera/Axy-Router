@@ -51,8 +51,7 @@ function isTruncated(provider: "openai" | "anthropic", data: any, answer: string
   const reason = provider === "anthropic"
     ? String(data?.stop_reason || "").toLowerCase()
     : String(data?.choices?.[0]?.finish_reason || "").toLowerCase();
-  return reason === "length" || reason === "max_tokens" || reason === "max_output_tokens" ||
-    false;
+  return reason === "length" || reason === "max_tokens" || reason === "max_output_tokens";
 }
 
 function toAnthropicContent(content: any): any {
@@ -129,6 +128,7 @@ async function callCandidateOnce(
   const timer = setTimeout(() => controller.abort(), CANDIDATE_TIMEOUT_MS);
   const abort = () => controller.abort();
   signal.addEventListener("abort", abort, { once: true });
+  if (signal.aborted) controller.abort();
   try {
     const isAnthropic = item.provider === "anthropic";
     const payload = isAnthropic
@@ -335,12 +335,12 @@ export async function handleCombo(
     };
     if (body?.stream) {
       const chunks = [
-        `event: message_start\\ndata: ${JSON.stringify({ type:"message_start", message:{ ...response, usage:{input_tokens:0,output_tokens:0} } })}\\n\\n`,
-        `event: content_block_start\\ndata: ${JSON.stringify({type:"content_block_start",index:0,content_block:{type:"text",text:""}})}\\n\\n`,
-        `event: content_block_delta\\ndata: ${JSON.stringify({type:"content_block_delta",index:0,delta:{type:"text_delta",text:finalAnswer}})}\\n\\n`,
-        `event: content_block_stop\\ndata: ${JSON.stringify({type:"content_block_stop",index:0})}\\n\\n`,
-        `event: message_delta\\ndata: ${JSON.stringify({type:"message_delta",delta:{stop_reason:"end_turn",stop_sequence:null},usage:{output_tokens:0}})}\\n\\n`,
-        `event: message_stop\\ndata: ${JSON.stringify({type:"message_stop"})}\\n\\n`
+        `event: message_start\\ndata: ${JSON.stringify({ type:"message_start", message:{ ...response, usage:{input_tokens:0,output_tokens:0} } })}\n\n`,
+        `event: content_block_start\\ndata: ${JSON.stringify({type:"content_block_start",index:0,content_block:{type:"text",text:""}})}\n\n`,
+        `event: content_block_delta\\ndata: ${JSON.stringify({type:"content_block_delta",index:0,delta:{type:"text_delta",text:finalAnswer}})}\n\n`,
+        `event: content_block_stop\\ndata: ${JSON.stringify({type:"content_block_stop",index:0})}\n\n`,
+        `event: message_delta\\ndata: ${JSON.stringify({type:"message_delta",delta:{stop_reason:"end_turn",stop_sequence:null},usage:{output_tokens:0}})}\n\n`,
+        `event: message_stop\\ndata: ${JSON.stringify({type:"message_stop"})}\n\n`
       ];
       return new Response(chunks.join(""), { status:200, headers:{"Content-Type":"text/event-stream","Cache-Control":"no-cache","Connection":"keep-alive"} });
     }
@@ -357,7 +357,7 @@ export async function handleCombo(
     system_fingerprint: "meow-combo"
   };
   if (body?.stream) {
-    const chunks = `data: ${JSON.stringify({id:response.id,object:"chat.completion.chunk",created:response.created,model:publicModel,choices:[{index:0,delta:{role:"assistant",content:finalAnswer},finish_reason:null}]})}\\n\\ndata: ${JSON.stringify({id:response.id,object:"chat.completion.chunk",created:response.created,model:publicModel,choices:[{index:0,delta:{},finish_reason:"stop"}],usage:response.usage})}\\n\\ndata: [DONE]\\n\\n`;
+    const chunks = `data: ${JSON.stringify({id:response.id,object:"chat.completion.chunk",created:response.created,model:publicModel,choices:[{index:0,delta:{role:"assistant",content:finalAnswer},finish_reason:null}]})}\n\ndata: ${JSON.stringify({id:response.id,object:"chat.completion.chunk",created:response.created,model:publicModel,choices:[{index:0,delta:{},finish_reason:"stop"}],usage:response.usage})}\n\ndata: [DONE]\n\n`;
     return new Response(chunks, { status:200, headers:{"Content-Type":"text/event-stream","Cache-Control":"no-cache","Connection":"keep-alive"} });
   }
   return new Response(JSON.stringify(response), { status:200, headers:{"Content-Type":"application/json"} });
