@@ -19,17 +19,17 @@ function getFollowUpstreamIds(): Set<string> {
 function generateKeyString(custom?: string): string {
   if (custom && custom.trim().length > 0) {
     const trimmed = custom.trim();
-    if (trimmed.startsWith("sk-neko-")) return trimmed;
+    if (trimmed.startsWith("sk-meow-")) return trimmed;
     if (trimmed.startsWith("sk-")) {
-      return `sk-neko-${trimmed.slice(3)}`;
+      return `sk-meow-${trimmed.slice(3)}`;
     }
-    return `sk-neko-${trimmed}`;
+    return `sk-meow-${trimmed}`;
   }
   const random = Array.from(crypto.getRandomValues(new Uint8Array(20)))
     .map((b) => b.toString(36))
     .join("")
     .slice(0, 28);
-  return `sk-neko-${random}`;
+  return `sk-meow-${random}`;
 }
 
 export const keysRoutes = new Elysia({ prefix: "/api/keys" })
@@ -111,7 +111,7 @@ export const keysRoutes = new Elysia({ prefix: "/api/keys" })
           allowedArr = [firstFollow];
         }
 
-        // Follow Upstream mode: Key is NOT randomly generated with sk-neko- prefix
+        // Follow Upstream mode: Key is NOT randomly generated with sk-meow- prefix
         // Uses default BB key or valid BB key pass-through
         if (customKey && customKey.trim().length > 0) {
           keyStr = customKey.trim();
