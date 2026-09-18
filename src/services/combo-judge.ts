@@ -1,18 +1,30 @@
 import { getComboConfig, getApiKeyForUpstream, getBaseUrl, getActiveUpstreamKeys, parseAllowedProviders } from "./router";
 import { type ClientKey, type UpstreamKey } from "../db/schema";
 
+type ToolCall = {
+  id: string;
+  type: "function";
+  function: { name: string; arguments: string };
+};
+
 type Candidate = {
   provider: "openai" | "anthropic";
   upstream: UpstreamKey;
   model: string;
   answer: string;
   turns: number;
+  toolCalls?: ToolCall[];
+  rawContent?: any[];
+  usage?: { input_tokens: number; output_tokens: number };
 };
 
 type CandidateResult = {
   answer: string;
   truncated: boolean;
   finishReason?: string;
+  toolCalls?: ToolCall[];
+  rawContent?: any[];
+  usage?: { input_tokens: number; output_tokens: number };
 };
 
 const MAX_CONTINUES = 8;
@@ -33,18 +45,42 @@ function cleanModel(model: string) {
   return s.includes("/") ? s.split("/").slice(1).join("/") : s;
 }
 
-function extractOpenAI(data: any): string {
-  const c = data?.choices?.[0]?.message?.content;
-  if (typeof c === "string") return c;
-  if (Array.isArray(c)) return c.map((x: any) => typeof x === "string" ? x : x?.text || "").join("");
-  return "";
+function extractOpenAI(data: any): Pick<CandidateResult, "answer" | "toolCalls" | "rawContent" | "usage"> {
+  const message = data?.choices?.[0]?.message;
+  const content = message?.content;
+  const answer = typeof content === "string"
+    ? content
+    : Array.isArray(content)
+      ? content.map((x: any) => typeof x === "string" ? x : x?.text || "").join("")
+      : "";
+  const toolCalls = Array.isArray(message?.tool_calls)
+    ? message.tool_calls.map((x: any) => ({
+        id: String(x?.id || crypto.randomUUID()),
+        type: "function" as const,
+        function: {
+          name: String(x?.function?.name || ""),
+          arguments: typeof x?.function?.arguments === "string" ? x.function.arguments : JSON.stringify(x?.function?.arguments ?? {})
+        }
+      })).filter((x: ToolCall) => x.function.name)
+    : undefined;
+  const usage = data?.usage
+    ? { input_tokens: Number(data.usage.prompt_tokens || 0), output_tokens: Number(data.usage.completion_tokens || 0) }
+    : undefined;
+  return { answer, toolCalls, usage };
 }
 
-function extractAnthropic(data: any): string {
-  if (Array.isArray(data?.content)) {
-    return data.content.map((x: any) => x?.type === "text" ? x.text : "").join("");
-  }
-  return typeof data?.content === "string" ? data.content : "";
+function extractAnthropic(data: any): Pick<CandidateResult, "answer" | "toolCalls" | "rawContent" | "usage"> {
+  const blocks = Array.isArray(data?.content) ? data.content : [];
+  const answer = blocks.filter((x: any) => x?.type === "text").map((x: any) => x.text || "").join("");
+  const toolCalls = blocks.filter((x: any) => x?.type === "tool_use").map((x: any) => ({
+    id: String(x.id || crypto.randomUUID()),
+    type: "function" as const,
+    function: { name: String(x.name || ""), arguments: JSON.stringify(x.input ?? {}) }
+  }));
+  const usage = data?.usage
+    ? { input_tokens: Number(data.usage.input_tokens || 0), output_tokens: Number(data.usage.output_tokens || 0) }
+    : undefined;
+  return { answer, toolCalls: toolCalls.length ? toolCalls : undefined, rawContent: blocks, usage };
 }
 
 function isTruncated(provider: "openai" | "anthropic", data: any, answer: string) {
@@ -59,7 +95,7 @@ function toAnthropicContent(content: any): any {
   if (!Array.isArray(content)) return String(content ?? "");
   return content.map((x: any) => {
     if (typeof x === "string") return { type: "text", text: x };
-    if (x?.type === "text") return x;
+    if (x?.type === "text" || x?.type === "thinking" || x?.type === "redacted_thinking" || x?.type === "tool_use" || x?.type === "tool_result") return x;
     if (x?.type === "image_url" && x?.image_url?.url) {
       const url = String(x.image_url.url);
       if (url.startsWith("data:")) {
@@ -72,6 +108,20 @@ function toAnthropicContent(content: any): any {
   });
 }
 
+function openAIToolsToAnthropic(tools: any) {
+  if (!Array.isArray(tools)) return undefined;
+  return tools.map((t: any) => t?.type === "function" && t?.function
+    ? { name: t.function.name, description: t.function.description, input_schema: t.function.parameters || { type: "object", properties: {} } }
+    : t).filter(Boolean);
+}
+
+function anthropicToolsToOpenAI(tools: any) {
+  if (!Array.isArray(tools)) return undefined;
+  return tools.map((t: any) => t?.name
+    ? { type: "function", function: { name: t.name, description: t.description, parameters: t.input_schema || { type: "object", properties: {} } } }
+    : t).filter(Boolean);
+}
+
 function toAnthropicBody(body: any, model: string, continuation?: { answer: string; instruction: string }) {
   const messages = Array.isArray(body?.messages) ? body.messages : [];
   const systemParts: string[] = [];
@@ -82,7 +132,20 @@ function toAnthropicBody(body: any, model: string, continuation?: { answer: stri
       else if (Array.isArray(m.content)) systemParts.push(m.content.map((x: any) => x?.text || "").join(""));
       continue;
     }
-    out.push({ role: m?.role === "assistant" ? "assistant" : "user", content: toAnthropicContent(m?.content) });
+    if (m?.role === "tool") {
+      out.push({ role: "user", content: [{ type: "tool_result", tool_use_id: String(m.tool_call_id || ""), content: typeof m.content === "string" ? m.content : JSON.stringify(m.content ?? "") }] });
+    } else if (m?.role === "assistant" && Array.isArray(m?.tool_calls)) {
+      const blocks: any[] = [];
+      if (m.content) blocks.push(...(Array.isArray(m.content) ? toAnthropicContent(m.content) : [{ type: "text", text: String(m.content) }]));
+      for (const tc of m.tool_calls) {
+        let input: any = {};
+        try { input = JSON.parse(tc?.function?.arguments || "{}"); } catch { input = { raw: tc?.function?.arguments || "" }; }
+        blocks.push({ type: "tool_use", id: String(tc?.id || crypto.randomUUID()), name: String(tc?.function?.name || ""), input });
+      }
+      out.push({ role: "assistant", content: blocks });
+    } else {
+      out.push({ role: m?.role === "assistant" ? "assistant" : "user", content: toAnthropicContent(m?.content) });
+    }
   }
   if (continuation) {
     out.push({
@@ -97,6 +160,16 @@ function toAnthropicBody(body: any, model: string, continuation?: { answer: stri
     messages: out.length ? out : [{ role: "user", content: "Please answer the request." }],
     stream: false
   };
+  if (body?.tools) payload.tools = openAIToolsToAnthropic(body.tools);
+  if (body?.tool_choice) {
+    payload.tool_choice = body.tool_choice === "required"
+      ? { type: "any" }
+      : body.tool_choice === "none"
+        ? { type: "none" }
+        : body.tool_choice?.function?.name
+          ? { type: "tool", name: body.tool_choice.function.name }
+          : { type: "auto" };
+  }
   // Avoid forwarding OpenAI sampling parameters that newer Claude models may reject.
   if (body?.stop_sequences) payload.stop_sequences = body.stop_sequences;
   if (body?.metadata) payload.metadata = body.metadata;
@@ -115,7 +188,16 @@ function toOpenAIBody(body: any, model: string, continuation?: { answer: string;
     messages.push({ role: "assistant", content: continuationContext(continuation.answer) });
     messages.push({ role: "user", content: continuation.instruction });
   }
-  return { ...body, model, messages, stream: false };
+  const normalizedMessages = messages.map((m: any) => {
+    if (m?.role === "assistant" && Array.isArray(m?.content)) return m;
+    if (m?.role === "assistant" && Array.isArray(m?.tool_calls)) return m;
+    if (m?.role === "user" && Array.isArray(m?.content)) return m;
+    if (m?.role === "tool") return m;
+    return m;
+  });
+  const payload: any = { ...body, model, messages: normalizedMessages, stream: false };
+  if (body?.max_completion_tokens && !body?.max_tokens) payload.max_tokens = body.max_completion_tokens;
+  return payload;
 }
 
 async function callCandidateOnce(
@@ -162,12 +244,15 @@ async function callCandidateOnce(
       throw err;
     }
     const data = await res.json();
-    const answer = isAnthropic ? extractAnthropic(data) : extractOpenAI(data);
-    if (!answer.trim()) throw new Error("empty response");
+    const extracted = isAnthropic ? extractAnthropic(data) : extractOpenAI(data);
+    if (!extracted.answer.trim() && !extracted.toolCalls?.length) throw new Error("empty response");
     return {
-      answer,
-      truncated: isTruncated(item.provider, data, answer),
-      finishReason: isAnthropic ? data?.stop_reason : data?.choices?.[0]?.finish_reason
+      answer: extracted.answer,
+      truncated: isTruncated(item.provider, data, extracted.answer),
+      finishReason: isAnthropic ? data?.stop_reason : data?.choices?.[0]?.finish_reason,
+      toolCalls: extracted.toolCalls,
+      rawContent: extracted.rawContent,
+      usage: extracted.usage
     };
   } finally {
     clearTimeout(timer);
@@ -208,6 +293,7 @@ async function continueCandidate(
     } catch (error) {
       throw new ComboContinuationError(String((error as Error)?.message || error), answer, turns - 1);
     }
+    if (result.toolCalls?.length) return { answer, turns };
     if (result.answer) answer += result.answer;
   }
   if (result.truncated && turns >= MAX_CONTINUES) throw new ComboContinuationError("maximum continuation limit reached", answer, turns);
@@ -235,13 +321,15 @@ async function judgeAnswers(config: any, answers: Candidate[], originalBody: any
     .find((u) => u.id === config.judge.upstreamId && u.provider === config.judge.provider && allowed(clientKey, u));
   if (!judgeUpstream) return answers[0]?.answer || "";
 
+  const originalMessages = Array.isArray(originalBody?.messages) ? originalBody.messages : [];
+  const compactMessages = JSON.stringify(originalMessages).slice(0, 30000);
   const prompt = [
     "You are the final answer judge for a multi-model AI gateway.",
     "Produce ONE best final answer to the user's request using the candidate answers below.",
     "Do not mention the gateway, candidates, providers, or judging process.",
     "",
     "USER REQUEST:",
-    JSON.stringify(originalBody?.messages || []),
+    compactMessages,
     "",
     ...answers.map((a, i) => { const candidateText = a.answer.length > MAX_JUDGE_CONTEXT_PER_CANDIDATE ? a.answer.slice(0, MAX_JUDGE_CONTEXT_PER_CANDIDATE / 2) + "\n\n[...middle omitted...]\n\n" + a.answer.slice(-MAX_JUDGE_CONTEXT_PER_CANDIDATE / 2) : a.answer; return `CANDIDATE ${i + 1} [${a.provider}/${a.model}]:\n${candidateText}`; }),
   ].join("\n");
@@ -295,8 +383,8 @@ export async function handleCombo(
   if (config.mode === "judge") {
     const results = await Promise.allSettled(candidates.map(c => callCandidate(c, body, signal)));
     answers = results.flatMap((r, i) =>
-      r.status === "fulfilled" && r.value?.answer
-        ? [{ ...candidates[i], answer: r.value.answer, turns: r.value.turns }]
+      r.status === "fulfilled" && (r.value?.answer || r.value?.toolCalls?.length)
+        ? [{ ...candidates[i], answer: r.value.answer, turns: r.value.turns, toolCalls: r.value.toolCalls, rawContent: r.value.rawContent, usage: r.value.usage }]
         : []
     );
   } else {
@@ -322,7 +410,8 @@ export async function handleCombo(
   }
 
   let finalAnswer = answers[0]!.answer;
-  if (config.mode === "judge" && config.judge) {
+  const selectedToolCalls = answers[0]!.toolCalls;
+  if (config.mode === "judge" && config.judge && !selectedToolCalls?.length && answers.every((a) => !a.toolCalls?.length)) {
     try {
       finalAnswer = await judgeAnswers(config, answers, body, clientKey, signal);
     } catch {}
@@ -336,8 +425,14 @@ export async function handleCombo(
       role: "assistant",
       model: publicModel,
       developer: config.developer,
-      content: [{ type: "text", text: finalAnswer }],
-      stop_reason: "end_turn",
+      content: selectedToolCalls?.length
+        ? selectedToolCalls.map((tc) => {
+            let input: any = {};
+            try { input = JSON.parse(tc.function.arguments || "{}"); } catch { input = { raw: tc.function.arguments || "" }; }
+            return { type: "tool_use", id: tc.id, name: tc.function.name, input };
+          })
+        : [{ type: "text", text: finalAnswer }],
+      stop_reason: selectedToolCalls?.length ? "tool_use" : "end_turn",
       stop_sequence: null,
       usage: { input_tokens: 0, output_tokens: 0 }
     };
