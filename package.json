@@ -1,5 +1,5 @@
 {
-  "name": "neko-router",
+  "name": "meow-router",
   "module": "index.ts",
   "type": "module",
   "private": true,
