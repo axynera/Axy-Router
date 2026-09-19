@@ -1,6 +1,6 @@
 package main
 
-import("fmt";"net/http")
+import "fmt"
 
 const css="*{box-sizing:border-box}body{margin:0;background:#09090b;color:#f4f4f5;font:15px system-ui,sans-serif}.shell{min-height:100vh;display:flex}.side{width:235px;padding:22px;border-right:1px solid #27272a;background:#101014}.brand{font-size:21px;font-weight:800;margin-bottom:35px}.nav{display:grid;gap:7px}.nav div{padding:11px 13px;border-radius:10px;color:#a1a1aa}.nav .on{background:#27272a;color:#fff}.main{flex:1;max-width:1200px;width:100%;padding:28px;margin:auto}.top{display:flex;justify-content:space-between;align-items:center}.muted{color:#a1a1aa}.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:22px}.card{background:#141417;border:1px solid #27272a;border-radius:17px;padding:20px}.value{font-size:28px;font-weight:750;margin-top:7px}.table{margin-top:20px}.row{display:flex;justify-content:space-between;gap:12px;padding:15px 0;border-bottom:1px solid #27272a}.logout{background:#fff;color:#111;border:0;border-radius:10px;padding:9px 13px}@media(max-width:720px){.shell{display:block}.side{width:auto;border-right:0;border-bottom:1px solid #27272a;padding:15px 17px}.brand{margin:0 0 12px}.nav{display:flex;overflow:auto}.nav div{white-space:nowrap}.main{padding:19px 15px}.grid{grid-template-columns:1fr}.row{display:block}.row span{display:block;margin-top:5px}}"
 
