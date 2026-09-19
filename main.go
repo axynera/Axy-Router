@@ -30,7 +30,7 @@ func main(){
  db.Exec("ALTER TABLE providers ADD COLUMN api_type TEXT NOT NULL DEFAULT 'openai'")
  s:=&Server{db:db,pin:getenv("AXY_PIN","123456"),secret:getenv("SESSION_SECRET","change-me")}
  mux:=http.NewServeMux()
- mux.HandleFunc("/",s.home);mux.HandleFunc("/providers",s.providerPage);mux.HandleFunc("/login",s.login);mux.HandleFunc("/logout",s.logout)
+ mux.HandleFunc("/",s.home);mux.HandleFunc("/providers",s.providerPage);mux.HandleFunc("/usage",s.usagePage);mux.HandleFunc("/login",s.login);mux.HandleFunc("/logout",s.logout)
  mux.HandleFunc("/api/health",s.health);mux.HandleFunc("/api/providers",s.providers);mux.HandleFunc("/api/providers/test",s.testProvider);mux.HandleFunc("/api/logs",s.logsAPI)
  mux.HandleFunc("/v1/models",s.models);mux.HandleFunc("/v1/chat/completions",s.chat)
  port:=getenv("PORT","3000");log.Printf("Axy Router listening on :%s",port);log.Fatal(http.ListenAndServe(":"+port,logging(mux)))
