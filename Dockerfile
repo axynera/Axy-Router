@@ -11,5 +11,4 @@ WORKDIR /app
 COPY --from=build /out/axy-router /app/axy-router
 USER axy
 ENV PORT=3000
-EXPOSE 3000
 ENTRYPOINT ["/app/axy-router"]
