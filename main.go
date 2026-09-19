@@ -115,7 +115,7 @@ func(s *Server)chatAnthropic(w http.ResponseWriter,r *http.Request,model string,
 
 func textFromAnthropic(parts []struct{Text string `json:"text"`}) string { var b strings.Builder; for _,p:=range parts { b.WriteString(p.Text) }; return b.String() }
 
-func(s *Server)addLog(method,path string,status int,d time.Duration){s.mu.Lock();defer s.mu.Unlock();s.logs=append([]RequestLog{{Time:time.Now().Format("15:04:05"),Method:method,Path:path,Status:status,Duration:d.Round(time.Millisecond).String()},s.logs...});if len(s.logs)>40{s.logs=s.logs[:40]}}
+func(s *Server)addLog(method,path string,status int,d time.Duration){s.mu.Lock();defer s.mu.Unlock();s.logs=append([]RequestLog{{Time:time.Now().Format("15:04:05"),Method:method,Path:path,Status:status,Duration:d.Round(time.Millisecond).String()}},s.logs...);if len(s.logs)>40{s.logs=s.logs[:40]}}
 
 func jsonOut(w http.ResponseWriter,status int,v any){w.Header().Set("Content-Type","application/json");w.WriteHeader(status);json.NewEncoder(w).Encode(v)}
 func logging(next http.Handler)http.Handler{return http.HandlerFunc(func(w http.ResponseWriter,r *http.Request){st:=time.Now();next.ServeHTTP(w,r);log.Printf("%s %s %s",r.Method,r.URL.Path,time.Since(st))})}
