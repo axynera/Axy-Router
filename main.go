@@ -10,13 +10,15 @@ import (
  "io"
  "log"
  "net/http"
+ "sync"
  "os"
  "strings"
  "time"
  _ "modernc.org/sqlite"
 )
 
-type Server struct{db *sql.DB; pin,secret string}
+type RequestLog struct{Time string;Method string;Path string;Status int;Duration string}
+type Server struct{db *sql.DB; pin,secret string; mu sync.Mutex; logs []RequestLog}
 
 func main(){
  os.MkdirAll("data",0755)
@@ -84,13 +86,15 @@ func(s *Server)testProvider(w http.ResponseWriter,r *http.Request){
 
 func(s *Server)models(w http.ResponseWriter,r *http.Request){rows,e:=s.db.Query("SELECT name,model FROM providers WHERE enabled=1");if e!=nil{jsonOut(w,500,map[string]string{"error":e.Error()});return};defer rows.Close();data:=[]any{};for rows.Next(){var n,m string;if rows.Scan(&n,&m)==nil{data=append(data,map[string]any{"id":m,"object":"model","owned_by":n})}};jsonOut(w,200,map[string]any{"object":"list","data":data})}
 
+func(s *Server)logsAPI(w http.ResponseWriter,r *http.Request){if !s.authed(r){jsonOut(w,401,map[string]string{"error":"Unauthorized"});return};s.mu.Lock();defer s.mu.Unlock();out:=append([]RequestLog(nil),s.logs...);jsonOut(w,200,map[string]any{"logs":out})}
+
 func(s *Server)chat(w http.ResponseWriter,r *http.Request){
  body,e:=io.ReadAll(r.Body);if e!=nil{jsonOut(w,400,map[string]string{"error":"invalid body"});return}
  var q struct{Model string `json:"model"`;Messages []map[string]any `json:"messages"`;MaxTokens int `json:"max_tokens"`;Stream bool `json:"stream"`}
  if json.Unmarshal(body,&q)!=nil||q.Model==""{jsonOut(w,400,map[string]string{"error":"model is required"});return}
  var base,key,typ string;e=s.db.QueryRow("SELECT base_url,api_key,api_type FROM providers WHERE enabled=1 AND model=? LIMIT 1",q.Model).Scan(&base,&key,&typ);if e==sql.ErrNoRows{jsonOut(w,404,map[string]string{"error":"model not configured"});return};if e!=nil{jsonOut(w,500,map[string]string{"error":"provider lookup failed"});return}
  if typ=="anthropic"{s.chatAnthropic(w,r,q.Model,q.Messages,q.MaxTokens,q.Stream,base,key);return}
- req,e:=http.NewRequestWithContext(r.Context(),"POST",strings.TrimRight(base,"/")+"/chat/completions",strings.NewReader(string(body)));if e!=nil{jsonOut(w,502,map[string]string{"error":"request failed"});return};req.Header.Set("Content-Type","application/json");req.Header.Set("Authorization","Bearer "+key);resp,e:=http.DefaultClient.Do(req);if e!=nil{jsonOut(w,502,map[string]string{"error":"provider request failed"});return};defer resp.Body.Close();if v:=resp.Header.Get("Content-Type");v!=""{w.Header().Set("Content-Type",v)};w.WriteHeader(resp.StatusCode);io.Copy(w,resp.Body)
+ req,e:=http.NewRequestWithContext(r.Context(),"POST",strings.TrimRight(base,"/")+"/chat/completions",strings.NewReader(string(body)));if e!=nil{jsonOut(w,502,map[string]string{"error":"request failed"});return};req.Header.Set("Content-Type","application/json");req.Header.Set("Authorization","Bearer "+key);outStart:=time.Now();resp,e:=http.DefaultClient.Do(req);outStatus:=0;if resp!=nil{outStatus=resp.StatusCode};s.addLog("POST",strings.TrimRight(base,"/")+"/chat/completions",outStatus,time.Since(outStart));if e!=nil{jsonOut(w,502,map[string]string{"error":"provider request failed"});return};defer resp.Body.Close();if v:=resp.Header.Get("Content-Type");v!=""{w.Header().Set("Content-Type",v)};w.WriteHeader(resp.StatusCode);io.Copy(w,resp.Body)
 }
 
 func(s *Server)chatAnthropic(w http.ResponseWriter,r *http.Request,model string,messages []map[string]any,maxTokens int,stream bool,base,key string){
@@ -108,6 +112,8 @@ func(s *Server)chatAnthropic(w http.ResponseWriter,r *http.Request,model string,
  out:=map[string]any{"id":a.ID,"object":"chat.completion","created":time.Now().Unix(),"model":a.Model,"choices":[]any{map[string]any{"index":0,"message":map[string]any{"role":"assistant","content":text.String()},"finish_reason":"stop"}},"usage":map[string]any{"prompt_tokens":a.Usage.Input,"completion_tokens":a.Usage.Output,"total_tokens":a.Usage.Input+a.Usage.Output}}
  jsonOut(w,200,out)
 }
+
+func(s *Server)addLog(method,path string,status int,d time.Duration){s.mu.Lock();defer s.mu.Unlock();s.logs=append([]RequestLog{{Time:time.Now().Format("15:04:05"),Method:method,Path:path,Status:status,Duration:d.Round(time.Millisecond).String()},s.logs...});if len(s.logs)>40{s.logs=s.logs[:40]}}
 
 func jsonOut(w http.ResponseWriter,status int,v any){w.Header().Set("Content-Type","application/json");w.WriteHeader(status);json.NewEncoder(w).Encode(v)}
 func logging(next http.Handler)http.Handler{return http.HandlerFunc(func(w http.ResponseWriter,r *http.Request){st:=time.Now();next.ServeHTTP(w,r);log.Printf("%s %s %s",r.Method,r.URL.Path,time.Since(st))})}
