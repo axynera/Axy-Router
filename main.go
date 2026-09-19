@@ -31,7 +31,7 @@ func main(){
  s:=&Server{db:db,pin:getenv("AXY_PIN","123456"),secret:getenv("SESSION_SECRET","change-me")}
  mux:=http.NewServeMux()
  mux.HandleFunc("/",s.home);mux.HandleFunc("/providers",s.providerPage);mux.HandleFunc("/login",s.login);mux.HandleFunc("/logout",s.logout)
- mux.HandleFunc("/api/health",s.health);mux.HandleFunc("/api/providers",s.providers);mux.HandleFunc("/api/providers/test",s.testProvider)
+ mux.HandleFunc("/api/health",s.health);mux.HandleFunc("/api/providers",s.providers);mux.HandleFunc("/api/providers/test",s.testProvider);mux.HandleFunc("/api/logs",s.logsAPI)
  mux.HandleFunc("/v1/models",s.models);mux.HandleFunc("/v1/chat/completions",s.chat)
  port:=getenv("PORT","3000");log.Printf("Axy Router listening on :%s",port);log.Fatal(http.ListenAndServe(":"+port,logging(mux)))
 }
@@ -108,11 +108,12 @@ func(s *Server)chatAnthropic(w http.ResponseWriter,r *http.Request,model string,
  data,_:=io.ReadAll(resp.Body);if resp.StatusCode<200||resp.StatusCode>=300{w.Header().Set("Content-Type","application/json");w.WriteHeader(resp.StatusCode);w.Write(data);return}
  var a struct{ID string `json:"id"`;Content []struct{Text string `json:"text"`} `json:"content"`;Model string `json:"model"`;Usage struct{Input int `json:"input_tokens"`;Output int `json:"output_tokens"`} `json:"usage"`}
  if json.Unmarshal(data,&a)!=nil{jsonOut(w,502,map[string]string{"error":"invalid anthropic response"});return}
- choice:=map[string]any{"index":0,"message":map[string]any{"role":"assistant","content":text.String()},"finish_reason":"stop"}
+ choice:=map[string]any{"index":0,"message":map[string]any{"role":"assistant","content":textFromAnthropic(a.Content)},"finish_reason":"stop"}
  out:=map[string]any{"id":a.ID,"object":"chat.completion","created":time.Now().Unix(),"model":a.Model,"choices":[]any{choice},"usage":map[string]any{"prompt_tokens":a.Usage.Input,"completion_tokens":a.Usage.Output,"total_tokens":a.Usage.Input+a.Usage.Output}}
  jsonOut(w,200,out)
 }
-}
+
+func textFromAnthropic(parts []struct{Text string `json:"text"`}) string { var b strings.Builder; for _,p:=range parts { b.WriteString(p.Text) }; return b.String() }
 
 func(s *Server)addLog(method,path string,status int,d time.Duration){s.mu.Lock();defer s.mu.Unlock();s.logs=append([]RequestLog{{Time:time.Now().Format("15:04:05"),Method:method,Path:path,Status:status,Duration:d.Round(time.Millisecond).String()},s.logs...});if len(s.logs)>40{s.logs=s.logs[:40]}}
 
