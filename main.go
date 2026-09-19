@@ -109,7 +109,7 @@ func(s *Server)chatAnthropic(w http.ResponseWriter,r *http.Request,model string,
  var a struct{ID string `json:"id"`;Content []struct{Text string `json:"text"`} `json:"content"`;Model string `json:"model"`;Usage struct{Input int `json:"input_tokens"`;Output int `json:"output_tokens"`} `json:"usage"`}
  if json.Unmarshal(data,&a)!=nil{jsonOut(w,502,map[string]string{"error":"invalid anthropic response"});return}
  var text strings.Builder;for _,p:=range a.Content{text.WriteString(p.Text)}
- out:=map[string]any{"id":a.ID,"object":"chat.completion","created":time.Now().Unix(),"model":a.Model,"choices":[]any{map[string]any{"index":0,"message":map[string]any{"role":"assistant","content":text.String()},"finish_reason":"stop"}},"usage":map[string]any{"prompt_tokens":a.Usage.Input,"completion_tokens":a.Usage.Output,"total_tokens":a.Usage.Input+a.Usage.Output}}
+ out:=map[string]any{"id":a.ID,"object":"chat.completion","created":time.Now().Unix(),"model":a.Model,"choices":[]any{map[string]any{"index":0,"message":map[string]any{"role":"assistant","content":text.String()},"finish_reason":"stop"},},"usage":map[string]any{"prompt_tokens":a.Usage.Input,"completion_tokens":a.Usage.Output,"total_tokens":a.Usage.Input+a.Usage.Output},}
  jsonOut(w,200,out)
 }
 
