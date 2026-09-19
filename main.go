@@ -89,7 +89,7 @@ func(s *Server)chat(w http.ResponseWriter,r *http.Request){
  var q struct{Model string `json:"model"`;Messages []map[string]any `json:"messages"`;MaxTokens int `json:"max_tokens"`;Stream bool `json:"stream"`}
  if json.Unmarshal(body,&q)!=nil||q.Model==""{jsonOut(w,400,map[string]string{"error":"model is required"});return}
  var base,key,typ string;e=s.db.QueryRow("SELECT base_url,api_key,api_type FROM providers WHERE enabled=1 AND model=? LIMIT 1",q.Model).Scan(&base,&key,&typ);if e==sql.ErrNoRows{jsonOut(w,404,map[string]string{"error":"model not configured"});return};if e!=nil{jsonOut(w,500,map[string]string{"error":"provider lookup failed"});return}
- if typ=="anthropic"{return s.chatAnthropic(w,r,q.Model,q.Messages,q.MaxTokens,q.Stream,base,key)}
+ if typ=="anthropic"{s.chatAnthropic(w,r,q.Model,q.Messages,q.MaxTokens,q.Stream,base,key);return}
  req,e:=http.NewRequestWithContext(r.Context(),"POST",strings.TrimRight(base,"/")+"/chat/completions",strings.NewReader(string(body)));if e!=nil{jsonOut(w,502,map[string]string{"error":"request failed"});return};req.Header.Set("Content-Type","application/json");req.Header.Set("Authorization","Bearer "+key);resp,e:=http.DefaultClient.Do(req);if e!=nil{jsonOut(w,502,map[string]string{"error":"provider request failed"});return};defer resp.Body.Close();if v:=resp.Header.Get("Content-Type");v!=""{w.Header().Set("Content-Type",v)};w.WriteHeader(resp.StatusCode);io.Copy(w,resp.Body)
 }
 
