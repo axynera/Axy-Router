@@ -108,9 +108,10 @@ func(s *Server)chatAnthropic(w http.ResponseWriter,r *http.Request,model string,
  data,_:=io.ReadAll(resp.Body);if resp.StatusCode<200||resp.StatusCode>=300{w.Header().Set("Content-Type","application/json");w.WriteHeader(resp.StatusCode);w.Write(data);return}
  var a struct{ID string `json:"id"`;Content []struct{Text string `json:"text"`} `json:"content"`;Model string `json:"model"`;Usage struct{Input int `json:"input_tokens"`;Output int `json:"output_tokens"`} `json:"usage"`}
  if json.Unmarshal(data,&a)!=nil{jsonOut(w,502,map[string]string{"error":"invalid anthropic response"});return}
- var text strings.Builder;for _,p:=range a.Content{text.WriteString(p.Text)}
- out:=map[string]any{"id":a.ID,"object":"chat.completion","created":time.Now().Unix(),"model":a.Model,"choices":[]any{map[string]any{"index":0,"message":map[string]any{"role":"assistant","content":text.String()},"finish_reason":"stop"},},"usage":map[string]any{"prompt_tokens":a.Usage.Input,"completion_tokens":a.Usage.Output,"total_tokens":a.Usage.Input+a.Usage.Output},}
+ choice:=map[string]any{"index":0,"message":map[string]any{"role":"assistant","content":text.String()},"finish_reason":"stop"}
+ out:=map[string]any{"id":a.ID,"object":"chat.completion","created":time.Now().Unix(),"model":a.Model,"choices":[]any{choice},"usage":map[string]any{"prompt_tokens":a.Usage.Input,"completion_tokens":a.Usage.Output,"total_tokens":a.Usage.Input+a.Usage.Output}}
  jsonOut(w,200,out)
+}
 }
 
 func(s *Server)addLog(method,path string,status int,d time.Duration){s.mu.Lock();defer s.mu.Unlock();s.logs=append([]RequestLog{{Time:time.Now().Format("15:04:05"),Method:method,Path:path,Status:status,Duration:d.Round(time.Millisecond).String()},s.logs...});if len(s.logs)>40{s.logs=s.logs[:40]}}
