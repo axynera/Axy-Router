@@ -64,7 +64,7 @@ function selectCredential(cfg: ModelConfig, provider: Provider) {
   const stateKey = `${cfg.provider}:${cfg.name}`;
   const index = (rr.get(stateKey) || 0) % available.length;
   rr.set(stateKey, index + 1);
-  return available[index];
+  return available[index]!;
 }
 
 function resolve(model: string) {
